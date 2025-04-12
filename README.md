@@ -4,15 +4,15 @@
 
 I am **not responsible** for bricked devices, damaged hardware, or any issues that arise from using this kernel.
 
-(对于因使用该内核而导致的设备损坏、硬件损坏或任何问题，我概不负责。)
+(对于因使用该内核而导致的设备损坏、硬件损坏或任何问题，我**概不负责**。)
 
 **Please** do thorough research and fully understand the features included in this kernel before flashing it!
 
-\(**在刷新内核之前，请***深入研究并完全理解内核中包含的功能！\)
+\(**在刷入内核之前，请**深入研究并完全理解内核中包含的功能！\)
 
 By flashing this kernel, **YOU** are choosing to make these modifications. If something goes wrong, **do not blame me**!
 
-\(刷新此内核即表示**你**选择进行这些修改。如果出了问题，***不要责怪我**！\)
+\(刷新此内核即表示**你**选择进行这些修改。如果出了问题，**不要责怪我**！\)
 ---
 
 ### Proceed at your own risk!（请自行承担风险！）
