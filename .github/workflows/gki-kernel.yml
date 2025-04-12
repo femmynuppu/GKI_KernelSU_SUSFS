@@ -80,7 +80,7 @@ jobs:
           ccache --set-config=compression=true
           echo "CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
       
-      - name: Restore ccache from cache
+      - name: 从缓存中还原ccache
         uses: actions/cache@v4
         with:
           path: ~/.ccache
@@ -88,7 +88,7 @@ jobs:
           restore-keys: |
             ${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.sub_level }}-ccache-
       
-      - name: Cache toolchain
+      - name: 缓存工具链
         id: cache-toolchain
         uses: actions/cache@v4
         with:
@@ -98,7 +98,7 @@ jobs:
           key: toolchain-${{ runner.os }}-v1
 
       # Step 2: Download toolchain if cache was not found
-      - name: Download toolchain (if cache not found)
+      - name: 下载工具链（如果未找到缓存）
         if: steps.cache-toolchain.outputs.cache-hit != 'true'
         run: |
           AOSP_MIRROR=https://android.googlesource.com
@@ -106,25 +106,20 @@ jobs:
           git clone $AOSP_MIRROR/kernel/prebuilts/build-tools -b $BRANCH --depth 1 kernel-build-tools
           git clone $AOSP_MIRROR/platform/system/tools/mkbootimg -b $BRANCH --depth 1 mkbootimg
 
-      - name: Set environment variables
+      - name: 设置环境变量
         run: |
           echo "AVBTOOL=$GITHUB_WORKSPACE/kernel-build-tools/linux-x86/bin/avbtool" >> $GITHUB_ENV
           echo "MKBOOTIMG=$GITHUB_WORKSPACE/mkbootimg/mkbootimg.py" >> $GITHUB_ENV
           echo "UNPACK_BOOTIMG=$GITHUB_WORKSPACE/mkbootimg/unpack_bootimg.py" >> $GITHUB_ENV
 
-      - name: Set boot sign key
+      - name: 密钥设置——已经过mkppk修改
         env:
           BOOT_SIGN_KEY: ${{ secrets.BOOT_SIGN_KEY }}
         run: |
-          if [ ! -z "$BOOT_SIGN_KEY" ]; then
-            echo "$BOOT_SIGN_KEY" > ./kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem
+            openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 > ./kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem
             echo "BOOT_SIGN_KEY_PATH=$GITHUB_WORKSPACE/kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem" >> $GITHUB_ENV
-          else
-            echo "BOOT_SIGN_KEY is not set. Exiting..."
-            exit 1
-          fi
 
-      - name: Install Repo
+      - name: 安装仓库
         run: |
           # Install dependencies
           mkdir -p ./git-repo
@@ -132,7 +127,7 @@ jobs:
           chmod a+rx ./git-repo/repo
           echo "REPO=$GITHUB_WORKSPACE/./git-repo/repo" >> $GITHUB_ENV
 
-      - name: Clone AnyKernel3 and Other Dependencies
+      - name: 克隆 AnyKernel3 和其他依赖项
         run: |
           echo "Cloning AnyKernel3 and other dependencies..."
 
@@ -147,7 +142,7 @@ jobs:
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
           git clone https://github.com/WildPlusKernel/kernel_patches.git
 
-      - name: Set CONFIG Environment Variable
+      - name: 设置 CONFIG 环境变量
         run: |
           # Set CONFIG dynamically based on inputs values
           CONFIG="${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.sub_level }}"
@@ -157,7 +152,7 @@ jobs:
 
           echo "CONFIG set to: $CONFIG"
 
-      - name: Initialize and Sync Kernel Source
+      - name: 初始化和同步内核源代码
         run: |
           echo "Creating folder for configuration: $CONFIG..."
           mkdir -p "$CONFIG"
@@ -181,24 +176,24 @@ jobs:
           $REPO --version
           $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
 
-      - name: Copy file
+      - name: 复制文件
         if: ${{ inputs.make_release == false }}
         run: |
           cp -r $CONFIG source-clean-$CONFIG
 
-      - name: Upload artifact
+      - name: 上传资产
         if: ${{ inputs.make_release == false }}
         uses: actions/upload-artifact@v4
         with:
           name: source-clean-${{ env.CONFIG }}
           path: source-clean-${{ env.CONFIG }}
 
-      - name: Remove file
+      - name: 移除文件
         if: ${{ inputs.make_release == false }}
         run: |
           rm -rf source-clean-$CONFIG
 
-      - name: Determine the branch for KernelSU
+      - name: 确定 KernelSU 的分支
         run: |
           if [[ "${{ inputs.kernelsu_branch }}" == "Stable" ]]; then
               echo "BRANCH=-" >> $GITHUB_ENV
@@ -213,7 +208,7 @@ jobs:
             exit 1
           fi
       
-      - name: Add KernelSU
+      - name: 添加 KernelSU
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
@@ -230,7 +225,7 @@ jobs:
             curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/main/kernel/setup.sh" | bash $BRANCH
           fi
           
-      - name: Apply SUSFS Patches for KernelSU Variants
+      - name: 为 KernelSU 变体安装 SUSFS 补丁
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
@@ -273,7 +268,7 @@ jobs:
           cd ../common
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
 
-      - name: Apply New Hooks Patches
+      - name: 应用新的HOOKS补丁
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/common"
@@ -292,7 +287,7 @@ jobs:
           #  patch -p1 -F 3 < ksu_hooks.patch
           fi
           
-      - name: Apply Hide Stuff Patches
+      - name: 应用隐藏某特征的补丁
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/common"
@@ -300,7 +295,7 @@ jobs:
           cp ../../kernel_patches/69_hide_stuff.patch ./
           patch -p1 -F 3 < 69_hide_stuff.patch
             
-      - name: Add SUSFS Configuration Settings
+      - name: 添加SUSFS配置设置
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
@@ -349,7 +344,7 @@ jobs:
           # Remove check_defconfig
           sed -i 's/check_defconfig//' ./common/build.config.gki
       
-      - name: Config BBR
+      - name: 配置 BBR
         #if: ${{ inputs.kernel_version != '6.6' }}
         run: |
           cd "$CONFIG/common"
@@ -364,7 +359,7 @@ jobs:
           echo "CONFIG_TCP_CONG_WESTWOOD=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_HTCP=n" >> ./common/arch/arm64/configs/gki_defconfig 
 
-      - name: Config Kernel Name
+      - name: 配置内核名称
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
@@ -383,19 +378,19 @@ jobs:
             sed -E -i '/^CONFIG_LOCALVERSION=/ s/(.*)"$/\1-Wild+"/' ./common/arch/arm64/configs/gki_defconfig
           fi
 
-      - name: Copy file
+      - name: 复制文件
         if: ${{ inputs.make_release == false }}
         run: |
           cp -r $CONFIG source-patched-$CONFIG
 
-      - name: Upload artifact
+      - name: 上传资产
         if: ${{ inputs.make_release == false }}
         uses: actions/upload-artifact@v4
         with:
           name: source-patched-${{ env.CONFIG }}
           path: source-patched-${{ env.CONFIG }}
 
-      - name: Remove file
+      - name: 移除文件
         if: ${{ inputs.make_release == false }}
         run: |
           rm -rf source-patched-$CONFIG
@@ -418,7 +413,7 @@ jobs:
             fi
             ccache --show-stats
             
-      - name: Create Bootimgs Folder and Copy Images
+      - name: 创建Bootimgs文件夹并复制图像
         if: ${{ inputs.android_version == 'android12' || inputs.android_version == 'android13' }}
         run: |
           echo "Changing to configuration directory: $CONFIG..."
@@ -433,7 +428,7 @@ jobs:
           # Create gzip of the Image file
           gzip -n -k -f -9 ./Image > ./Image.gz
 
-      - name: Create Bootimgs Folder and Copy Images
+      - name: 创建Bootimgs文件夹并复制图像
         if: ${{ inputs.android_version == 'android14' || inputs.android_version == 'android15' }}
         run: |
           echo "Changing to configuration directory: $CONFIG..."
@@ -448,7 +443,7 @@ jobs:
           # Create gzip of the Image file
           gzip -n -k -f -9 ./Image > ./Image.gz
 
-      - name: Create ZIP Files for Different Formats
+      - name: 创建不同格式的ZIP文件
         run: |
           echo "Creating zip files for all formats..."
           cd ./AnyKernel3
@@ -472,7 +467,7 @@ jobs:
           zip -r "../$ZIP_NAME" ./*
           rm ./Image.gz
 
-      - name: Run Boot Image ${{ inputs.android_version }} Build Script
+      - name: 运行boot镜像 ${{ inputs.android_version }} 编译脚本
         if: ${{ inputs.android_version == 'android12' }}
         run: |
           echo "Changing to configuration directory: $CONFIG..."
@@ -522,7 +517,7 @@ jobs:
           $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot-lz4.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
           cp ./boot-lz4.img ../${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-boot-lz4.img
 
-      - name: Run Boot Image ${{ inputs.android_version }} Build Script
+      - name: 运行boot镜像 ${{ inputs.android_version }} 编译脚本
         if: ${{ inputs.android_version == 'android13' || inputs.android_version == 'android14' || inputs.android_version == 'android15' }}
         run: |
           cd bootimgs
@@ -545,7 +540,7 @@ jobs:
           $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot-lz4.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
           cp ./boot-lz4.img ../${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-boot-lz4.img
 
-      - name: Upload Build Artifacts
+      - name: 上传编译资产
         uses: actions/upload-artifact@v4
         with:
           name: kernel-${{ env.CONFIG }}
