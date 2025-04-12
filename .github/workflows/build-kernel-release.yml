@@ -29,7 +29,10 @@ on:
         description: "如果选择了 “其他”，请指定您的自定义分支"
         required: false
         type: string  # This input is required if 'Other' is chosen
-
+      version:
+        description: '自定义版本名(如5.10.196后面的字符)'
+        required: false
+        type: string
 jobs:
   build-kernel-a12-5-10:
     uses: ./.github/workflows/kernel-a12-5.10.yml
@@ -39,7 +42,7 @@ jobs:
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
-
+      version: ${{ inputs.version }}
   build-kernel-a13-5-10:
     uses: ./.github/workflows/kernel-a13-5.10.yml
     secrets: inherit
@@ -48,6 +51,7 @@ jobs:
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
+      version: ${{ inputs.version }}
 
   build-kernel-a13-5-15:
     uses: ./.github/workflows/kernel-a13-5.15.yml
@@ -57,6 +61,7 @@ jobs:
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
+      version: ${{ inputs.version }}
 
   build-kernel-a14-5-15:
     uses: ./.github/workflows/kernel-a14-5.15.yml
@@ -66,6 +71,7 @@ jobs:
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
+      version: ${{ inputs.version }}
 
   build-kernel-a14-6-1:
     uses: ./.github/workflows/kernel-a14-6.1.yml
@@ -75,6 +81,7 @@ jobs:
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
+      version: ${{ inputs.version }}
 
   build-kernel-a15-6-6:
     uses: ./.github/workflows/kernel-a15-6.6.yml
@@ -84,6 +91,7 @@ jobs:
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
+      version: ${{ inputs.version }}
 
   trigger-release:
     runs-on: ubuntu-latest

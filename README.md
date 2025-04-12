@@ -12,7 +12,7 @@ I am **not responsible** for bricked devices, damaged hardware, or any issues th
 
 By flashing this kernel, **YOU** are choosing to make these modifications. If something goes wrong, **do not blame me**!
 
-\(刷新此内核即表示**你**选择进行这些修改。如果出了问题，**不要责怪我**！)
+\(刷入此内核即表示**你**选择进行这些修改。如果出了问题，**不要责怪我**！)
 
 ---
 
