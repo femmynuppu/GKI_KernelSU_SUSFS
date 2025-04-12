@@ -1,4 +1,4 @@
-name: Build and Release GKI Kernels
+name: 编译内核
 
 permissions:
   contents: write  # Allow writing to repository contents (for pushing tags)
@@ -7,13 +7,8 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      make_release:
-        description: 'Do you want to create a release?'
-        required: true
-        type: boolean
-        default: true
       kernelsu_variant:
-        description: "Choose KernelSU"
+        description: "选择 KernelSU"
         required: true
         type: choice
         options:
@@ -22,16 +17,16 @@ on:
           - MKSU
         default: Next
       kernelsu_branch:
-        description: "Choose ksu branch"
+        description: "选择 ksu 分支"
         required: true
         type: choice
         options:
-          - Stable
-          - Dev
-          - Other
-        default: Stable
+          - Stable(标准)
+          - Dev(开发)
+          - Other(其他/指定)
+        default: Stable(标准)
       kernelsu_branch_other:
-        description: "If 'Other' is selected, specify your custom branch"
+        description: "如果选择了 “其他”，请指定您的自定义分支"
         required: false
         type: string  # This input is required if 'Other' is chosen
 
@@ -40,7 +35,7 @@ jobs:
     uses: ./.github/workflows/kernel-a12-5.10.yml
     secrets: inherit
     with:
-      make_release: ${{ inputs.make_release }}
+      make_release: false
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
@@ -131,17 +126,17 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Determine the branch for KernelSU-${{ inputs.kernelsu_variant }}
-        if: ${{ inputs.kernelsu_branch == 'Dev' || inputs.kernelsu_variant == 'MKSU' }}
+        if: ${{ inputs.kernelsu_branch == 'Dev(开发)' || inputs.kernelsu_variant == 'MKSU' }}
         run: |
           # Determine the branch based on user input
           if [[ "${{ inputs.kernelsu_variant }}" == "Official" || "${{ inputs.kernelsu_variant }}" == "MKSU" ]]; then
             BRANCH="main"
           elif [[ "${{ inputs.kernelsu_variant }}" == "Next" ]]; then
             BRANCH="next"
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Other" && -n "${{ inputs.kernelsu_branch_other }}" ]]; then
+          elif [[ "${{ inputs.kernelsu_branch }}" == "Other(其他/指定)" && -n "${{ inputs.kernelsu_branch_other }}" ]]; then
             BRANCH="${{ inputs.kernelsu_branch_other }}"
           else
-            echo "Error: Custom branch not provided for 'Other'" >&2
+            echo "Error: Custom branch not provided for 'Other(其他/指定)'" >&2
             exit 1
           fi
 
@@ -166,21 +161,21 @@ jobs:
             echo "Unknown variant"
           fi
           
-          if [[ "${{ inputs.kernelsu_branch }}" == "Stable" && "${{ inputs.kernelsu_variant }}" != "MKSU" ]]; then
+          if [[ "${{ inputs.kernelsu_branch }}" == "Stable(标准)" && "${{ inputs.kernelsu_variant }}" != "MKSU" ]]; then
             # Fetch the latest tag
             TAG=$(git ls-remote --tags --sort=-v:refname $REPO_URL | grep -o 'refs/tags/.*' | cut -d'/' -f3 | head -n1)
             if [[ -z "$TAG" ]]; then
-              echo "Error: Could not fetch latest tag for Stable" >&2
+              echo "Error: Could not fetch latest tag for Stable(标准)" >&2
               exit 1
             fi
             KSU_REF=$TAG
             KSU_URL="https://github.com/$REPO_URL2/releases/tag/$TAG"
 
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev" || "${{ inputs.kernelsu_variant }}" == "MKSU" ]]; then
+          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev(开发)" || "${{ inputs.kernelsu_variant }}" == "MKSU" ]]; then
             # Fetch the latest commit from "next" branch
             COMMIT_HASH=$(git ls-remote $REPO_URL refs/heads/$KSU_BRANCH | awk '{ print $1 }')
             if [[ -z "$COMMIT_HASH" ]]; then
-              echo "Error: Could not fetch latest commit for Dev" >&2
+              echo "Error: Could not fetch latest commit for Dev(开发)" >&2
               exit 1
             fi
             KSU_REF=$COMMIT_HASH
