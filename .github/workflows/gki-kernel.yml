@@ -141,7 +141,8 @@ jobs:
           git clone https://github.com/WildPlusKernel/AnyKernel3.git -b "gki-2.0"
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
           git clone https://github.com/WildPlusKernel/kernel_patches.git
-
+          # Sukisu的补丁仓库
+          git clone https://github.com/ShirkNeko/SukiSU_patch.git
       - name: 设置 CONFIG 环境变量
         run: |
           # Set CONFIG dynamically based on inputs values
@@ -201,6 +202,8 @@ jobs:
               echo "BRANCH=-s main" >> $GITHUB_ENV
           elif [[ "${{ inputs.kernelsu_branch }}" == "Dev(开发)" && "${{ inputs.kernelsu_variant }}" == "Next" ]]; then
               echo "BRANCH=-s next" >> $GITHUB_ENV
+          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev(开发) && ( "${{ inputs.kernelsu_variant }}" == "SukiSU" ) ]]; then
+              echo "BRANCH=-s susfs-dev" >> $GITHUB_ENV
           elif [[ "${{ inputs.kernelsu_branch }}" == "Other(其他/指定)" && -n "${{ inputs.kernelsu_branch_other }}" ]]; then
             echo "BRANCH=-s ${{ inputs.kernelsu_branch_other }}" >> $GITHUB_ENV
           else
@@ -223,6 +226,9 @@ jobs:
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "Adding KernelSU MKSU..."
             curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/main/kernel/setup.sh" | bash $BRANCH
+          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+            echo "Adding KernelSU SukiSU..."
+            curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
           fi
           
       - name: 为 KernelSU 变体安装 SUSFS 补丁
@@ -258,7 +264,10 @@ jobs:
             patch -p1 < mksu_susfs.patch
             cp ../../kernel_patches/mksu/fix.patch ./KernelSU/
             patch -p1 < fix.patch
-            
+          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+            echo "Applying SUSFS patches for SukiSU..."
+             cd ./KernelSU
+            echo "Applying SukiSU specific SUSFS patch..."
           else
             echo "Invalid KernelSU variant selected!"
             exit 1
@@ -273,27 +282,29 @@ jobs:
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/common"
 
-          #if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
-          #  echo "Applying hooks for Official KernelSU..."
-          #  cp ../../kernel_patches/hooks/ksu_hooks.patch ./
-          #  patch -p1 -F 3 < ksu_hooks.patch
           if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "Applying hooks for KernelSU-Next..."
             cp ../../kernel_patches/next/syscall_hooks.patch ./
             patch -p1 -F 3 < syscall_hooks.patch
-          #elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
-          #  echo "Applying hooks for MKSU..."
-          #  cp ../../kernel_patches/hooks/ksu_hooks.patch ./
-          #  patch -p1 -F 3 < ksu_hooks.patch
+          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+            echo "Applying hooks for SukiSU..."
+            cp ../../SukiSU_patch/hooks/new_hooks.patch ./
+            patch -p1 -F 3 < new_hooks.patch
           fi
+          
           
       - name: 应用隐藏某特征的补丁
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/common"
           # Apply additional patch
-          cp ../../kernel_patches/69_hide_stuff.patch ./
-          patch -p1 -F 3 < 69_hide_stuff.patch
+          if [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+            cp ../../SukiSU_patch/69_hide_stuff.patch ./
+            patch -p1 -F 3 < 69_hide_stuff.patch
+          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+            cp ../../kernel_patches/69_hide_stuff.patch ./
+            patch -p1 -F 3 < 69_hide_stuff.patch
+          fi
             
       - name: 添加SUSFS配置设置
         run: |
@@ -307,8 +318,16 @@ jobs:
           
           if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "CONFIG_KSU_WITH_KPROBES=n" >> ./common/arch/arm64/configs/gki_defconfig
-          fi
+          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+            echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
 
+            echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_CRYPTO_LZ4K=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_CRYPTO_LZ4KD=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_CRYPTO_LZ4HC=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_CRYPTO_842=y" >> ./common/arch/arm64/configs/gki_defconfig
+          fi
           # Add SUSFS configuration settings
           echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -375,7 +394,7 @@ jobs:
           else
             rm -rf ./common/android/abi_gki_protected_exports_*
             sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
-            sed -E -i '/^CONFIG_LOCALVERSION=/ s/(.*)"$/\1-Wild+"/' ./common/arch/arm64/configs/gki_defconfig
+            sed -E -i '/^CONFIG_LOCALVERSION=/ s/(.*)"$/\1"/' ./common/arch/arm64/configs/gki_defconfig
           fi
 
       - name: 复制文件
