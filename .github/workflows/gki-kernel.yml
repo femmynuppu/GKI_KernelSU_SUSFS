@@ -202,6 +202,8 @@ jobs:
               echo "BRANCH=-s main" >> $GITHUB_ENV
           elif [[ "${{ inputs.kernelsu_branch }}" == "Dev(开发)" && "${{ inputs.kernelsu_variant }}" == "Next" ]]; then
               echo "BRANCH=-s next" >> $GITHUB_ENV
+          elif [[ "${{ inputs.kernelsu_branch }}" == "Stable(标准)" && ( "${{ inputs.kernelsu_variant }}" == "SukiSU" ) ]]; then
+              echo "BRANCH=-" >> $GITHUB_ENV
           elif [[ "${{ inputs.kernelsu_branch }}" == "Dev(开发)" && ( "${{ inputs.kernelsu_variant }}" == "SukiSU" ) ]]; then
               echo "BRANCH=-s susfs-dev" >> $GITHUB_ENV
           elif [[ "${{ inputs.kernelsu_branch }}" == "Other(其他/指定)" && -n "${{ inputs.kernelsu_branch_other }}" ]]; then
@@ -301,7 +303,7 @@ jobs:
           if [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             cp ../../SukiSU_patch/69_hide_stuff.patch ./
             patch -p1 -F 3 < 69_hide_stuff.patch
-          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+          else
             cp ../../kernel_patches/69_hide_stuff.patch ./
             patch -p1 -F 3 < 69_hide_stuff.patch
           fi
@@ -363,21 +365,6 @@ jobs:
           # Remove check_defconfig
           sed -i 's/check_defconfig//' ./common/build.config.gki
       
-      - name: 配置 BBR
-        #if: ${{ inputs.kernel_version != '6.6' }}
-        run: |
-          cd "$CONFIG/common"
-          # Add bbrv3 config setting
-          #cp ../../kernel_patches/bbr/tcp_bbr.c ./net/ipv4/
-
-          cd ..
-          echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./common/arch/arm64/configs/gki_defconfig 
-          echo "CONFIG_TCP_CONG_BBR=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NET_SCH_FQ=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_BIC=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_WESTWOOD=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_HTCP=n" >> ./common/arch/arm64/configs/gki_defconfig 
-
       - name: 配置内核名称
         run: |
           echo "Changing to configuration directory: $CONFIG..."
