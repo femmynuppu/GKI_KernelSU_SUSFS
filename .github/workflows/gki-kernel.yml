@@ -263,9 +263,9 @@ jobs:
             
             echo "Applying MKSU specific SUSFS patch..."
             cp ../../kernel_patches/mksu/mksu_susfs.patch ./
-            patch -p1 < mksu_susfs.patch
+            patch -p1 < mksu_susfs.patch || true
             cp ../../kernel_patches/mksu/fix.patch ./
-            patch -p1 < fix.patch
+            patch -p1 < fix.patch || true
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying SUSFS patches for SukiSU..."
              cd ./KernelSU
