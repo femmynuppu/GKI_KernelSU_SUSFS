@@ -268,8 +268,8 @@ jobs:
             echo "Applying MKSU specific SUSFS patch..."
             cp ../../kernel_patches/mksu/mksu_susfs.patch ./
             patch -p1 < mksu_susfs.patch
-            cp ../../kernel_patches/mksu/fix.patch ./
-            patch -p1 < fix.patch
+            # cp ../../kernel_patches/mksu/fix.patch ./
+            # patch -p1 < fix.patch
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying SUSFS patches for SukiSU..."
              cd ./KernelSU
@@ -332,6 +332,8 @@ jobs:
 
             echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig
+          elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
+            echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
           fi
           # Add SUSFS configuration settings
           echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
