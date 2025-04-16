@@ -58,7 +58,7 @@ jobs:
           remove-haskell: "true"
           remove-codeql: "true"
 
-      - name: Set CONFIG Environment Variable
+      - name: 设定 CONFIG 环境变量
         run: |
           # Set CONFIG dynamically based on inputs values
           CONFIG="${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.sub_level }}"
@@ -69,10 +69,10 @@ jobs:
           echo "CONFIG set to: $CONFIG"
 
       # Install ccache
-      - name: Install ccache
+      - name: 安装 ccache
         run: sudo apt update && sudo apt upgrade -y && sudo apt install -y ccache python3 git curl
 
-      - name: Set up ccache
+      - name: 配置 ccache
         run: |
           mkdir -p ~/.cache/bazel # Ensure the directory exists
           ccache --version
@@ -177,22 +177,22 @@ jobs:
           $REPO --version
           $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
 
-      - name: 复制文件
-        if: ${{ inputs.make_release == false }}
-        run: |
-          cp -r $CONFIG source-clean-$CONFIG
+      # - name: 复制文件
+      #   if: ${{ inputs.make_release == false }}
+      #   run: |
+      #     cp -r $CONFIG source-clean-$CONFIG
 
-      - name: 上传资产
-        if: ${{ inputs.make_release == false }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: source-clean-${{ env.CONFIG }}
-          path: source-clean-${{ env.CONFIG }}
+      # - name: 上传资产
+      #   if: ${{ inputs.make_release == false }}
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: source-clean-${{ env.CONFIG }}
+      #     path: source-clean-${{ env.CONFIG }}
 
-      - name: 移除文件
-        if: ${{ inputs.make_release == false }}
-        run: |
-          rm -rf source-clean-$CONFIG
+      # - name: 移除文件
+      #   if: ${{ inputs.make_release == false }}
+      #   run: |
+      #     rm -rf source-clean-$CONFIG
 
       - name: 确定 KernelSU 的分支
         run: |
@@ -228,6 +228,10 @@ jobs:
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "Adding KernelSU MKSU..."
             curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/main/kernel/setup.sh" | bash $BRANCH
+            echo '进入KernelSU/'
+            cd KernelSU/
+            git checkout 203cd4d7465484e74643d275f904902a5a6b90c6
+            echo '修改了MKSU为指定提交'
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Adding KernelSU SukiSU..."
             curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
@@ -264,8 +268,8 @@ jobs:
             echo "Applying MKSU specific SUSFS patch..."
             cp ../../kernel_patches/mksu/mksu_susfs.patch ./
             patch -p1 < mksu_susfs.patch
-            # cp ../../kernel_patches/mksu/fix.patch ./KernelSU/
-            # patch -p1 < fix.patch
+            cp ../../kernel_patches/mksu/fix.patch ./
+            patch -p1 < fix.patch
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying SUSFS patches for SukiSU..."
              cd ./KernelSU
@@ -390,22 +394,22 @@ jobs:
             sed -E -i '/^CONFIG_LOCALVERSION=/ s/(.*)"$/\1"/' ./common/arch/arm64/configs/gki_defconfig
           fi
 
-      - name: 复制文件
-        if: ${{ inputs.make_release == false }}
-        run: |
-          cp -r $CONFIG source-patched-$CONFIG
+      # - name: 复制文件
+      #   if: ${{ inputs.make_release == false }}
+      #   run: |
+      #     cp -r $CONFIG source-patched-$CONFIG
 
-      - name: 上传资产
-        if: ${{ inputs.make_release == false }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: source-patched-${{ env.CONFIG }}
-          path: source-patched-${{ env.CONFIG }}
+      # - name: 上传资产
+      #   if: ${{ inputs.make_release == false }}
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: source-patched-${{ env.CONFIG }}
+      #     path: source-patched-${{ env.CONFIG }}
 
-      - name: 移除文件
-        if: ${{ inputs.make_release == false }}
-        run: |
-          rm -rf source-patched-$CONFIG
+      # - name: 移除文件
+      #   if: ${{ inputs.make_release == false }}
+      #   run: |
+      #     rm -rf source-patched-$CONFIG
 
       - name: Build with retry
         uses: nick-fields/retry@v3
@@ -424,7 +428,7 @@ jobs:
               tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast --lto=thin //common:kernel_aarch64_dist || exit 1
             fi
             ccache --show-stats
-      - name: Patch Image File A12 & A13
+      - name: 修补 Image 文件 安卓12和安卓13(仅限sukisu)
         if: ${{ inputs.kernelsu_variant == 'SukiSU' && (inputs.android_version == 'android12' || inputs.android_version == 'android13') }}
         run: |
           if [ "${{ inputs.kernel_version }}" != "6.6" ]; then
@@ -438,7 +442,7 @@ jobs:
             cd ../../../..
           fi
 
-      - name: Patch Image File A14 & A15
+      - name: 修补 Image 文件 安卓14和安卓15(仅限sukisu)
         if: ${{ inputs.kernelsu_variant == 'SukiSU' && (inputs.android_version == 'android14' || inputs.android_version == 'android15') }}
         run: |
           if [ "${{ inputs.kernel_version }}" != "6.6" ]; then

@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       kernelsu_variant:
+        # description: "选择 KernelSU | 注意:选中MKSU时为标准版"
         description: "选择 KernelSU"
         required: true
         type: choice
