@@ -26,10 +26,6 @@ on:
           - Dev(开发)
           - Other(其他/指定)
         default: Dev(开发)
-      kernelsu_branch_other:
-        description: "如果选择了 “其他”，请指定您的自定义分支"
-        required: false
-        type: string  # This input is required if 'Other' is chosen
       version:
         description: '自定义版本名(如5.10.196后面的字符)'
         required: false
