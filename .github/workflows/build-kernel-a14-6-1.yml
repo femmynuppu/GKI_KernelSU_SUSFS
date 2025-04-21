@@ -27,7 +27,7 @@ on:
           - Other(其他/指定)
         default: Dev(开发)
       version:
-        description: '自定义版本名(如5.10.196后面的字符)'
+        description: '自定义版本名(如6.1.93后面的字符/留空则使用默认版本号)'
         required: false
         type: string
 jobs:
@@ -39,6 +39,5 @@ jobs:
       make_release: false
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
-      kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
       version: ${{ inputs.version }}
 
