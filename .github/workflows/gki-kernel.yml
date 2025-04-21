@@ -28,9 +28,9 @@ on:
       kernelsu_branch:
         required: true
         type: string
-      kernelsu_branch_other:
-        required: false
-        type: string
+      # kernelsu_branch_other:
+      #   required: false
+      #   type: string
       revision:
         required: false
         type: string
@@ -206,8 +206,6 @@ jobs:
               echo "BRANCH=-" >> $GITHUB_ENV
           elif [[ "${{ inputs.kernelsu_branch }}" == "Dev(开发)" && ( "${{ inputs.kernelsu_variant }}" == "SukiSU" ) ]]; then
               echo "BRANCH=-s susfs-dev" >> $GITHUB_ENV
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Other(其他/指定)" && -n "${{ inputs.kernelsu_branch_other }}" ]]; then
-            echo "BRANCH=-s ${{ inputs.kernelsu_branch_other }}" >> $GITHUB_ENV
           else
             echo "Error: Custom branch not provided for 'Other(其他/指定)'" >&2
             exit 1

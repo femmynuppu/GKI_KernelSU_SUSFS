@@ -22,10 +22,10 @@ on:
         required: true
         type: string
         default: Stable
-      kernelsu_branch_other:
-        required: false
-        type: string
-        default: ""
+      # kernelsu_branch_other:
+      #   required: false
+      #   type: string
+      #   default: ""
       version:
         required: false
         type: string
@@ -75,5 +75,5 @@ jobs:
       revision: ${{ matrix.revision }}
       kernelsu_variant: ${{ inputs.kernelsu_variant || 'Next' }}
       kernelsu_branch: ${{ inputs.kernelsu_branch || 'Dev' }}
-      kernelsu_branch_other: ${{ inputs.kernelsu_branch_other || '' }}
+      # kernelsu_branch_other: ${{ inputs.kernelsu_branch_other || '' }}
       version: ${{ inputs.version || '' }}
