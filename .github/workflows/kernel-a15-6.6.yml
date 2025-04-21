@@ -4,9 +4,6 @@ permissions:
   actions: write   # Allows triggering actions
 
 on:
-  push:
-    paths:
-      - .github/workflows/kernel-a15-6.6.yml  # Runs when this workflow file is updated\
   workflow_dispatch:
   workflow_call:  # This allows this workflow to be called from another workflow
     inputs:
