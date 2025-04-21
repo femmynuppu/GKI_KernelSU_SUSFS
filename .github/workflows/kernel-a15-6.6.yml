@@ -19,10 +19,6 @@ on:
         required: true
         type: string
         default: Stable
-      kernelsu_branch_other:
-        required: false
-        type: string
-        default: ""
       version:
         required: false
         type: string
