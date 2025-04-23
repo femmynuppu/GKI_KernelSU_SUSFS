@@ -218,6 +218,7 @@ jobs:
             ["gki_android13_5_15"]="gki-android13-5.15"
             ["gki_android14_5_15"]="gki-android14-5.15"
             ["gki_android14_6_1"]="gki-android14-6.1"
+            ["gki_android15_6_1"]="gki-android15-6.6"
           )
 
           for var_name in "${!BRANCH_MAP[@]}"; do
@@ -262,7 +263,7 @@ jobs:
             echo "This is the SukiSU variant"
             echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
             echo "$RELEASE_NOTES" >> $GITHUB_ENV
-            echo "SukiSU Manager:" >> $GITHUB_ENV
+            echo "SukiSU 管理器:" >> $GITHUB_ENV
             echo "-> https://github.com/ShirkNeko/KernelSU" >> $GITHUB_ENV
             echo "EOF" >> $GITHUB_ENV
           else
