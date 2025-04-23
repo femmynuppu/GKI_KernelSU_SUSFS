@@ -121,7 +121,7 @@ jobs:
         功能:
         -> KernelSU-${{ inputs.kernelsu_variant }}-${{ inputs.kernelsu_branch }}
         -> SUSFS ඞ v1.5.5 
-        -> 手动设置系统调用Hooks,实现更好的隐藏效果
+        -> 手动Syscall Hooks,实现更好的隐藏效果
         -> Magic Mount 支持
         -> 简单隐藏 LineageOS 检测
         -> 徒劳隐藏 jit-zygote-cache 检测
@@ -130,7 +130,7 @@ jobs:
 
         备注:
         -> SUS SU 模式 2 将显示为禁用或不兼容，原因是不使用 kprobe 钩子（编译内核时），并且不再需要！
-        -> Kernel Flasher刷入AK3在最新的susfs会变砖, 尝试 https://github.com/libxzr/HorizonKernelFlasher!
+        -> 在最新版的susfs, 使用Kernel Flasher刷入AK3压缩包会变砖, 尝试 https://github.com/libxzr/HorizonKernelFlasher!
 
         模块: 
         -> https://github.com/sidex15/ksu_module_susfs
@@ -146,8 +146,10 @@ jobs:
           # Determine the branch based on user input
           if [[ "${{ inputs.kernelsu_variant }}" == "Official" || "${{ inputs.kernelsu_variant }}" == "MKSU" ]]; then
             BRANCH="main"
-          elif [[ "${{ inputs.kernelsu_variant }}" == "Next" ]]; then
+          elif [[ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]]; then
             BRANCH="next"
+          elif [[ "${{ inputs.kernelsu_variant }}" == "Next" ]]; then
+            BRANCH="main"
           else
             echo "Error: Custom branch not provided for 'Other(其他/指定)'" >&2
             exit 1
@@ -170,6 +172,10 @@ jobs:
             echo "This is the MKSU variant"
             REPO_URL="https://github.com/5ec1cff/KernelSU.git"
             REPO_URL2="5ec1cff/KernelSU"
+          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+            echo "This is the SukiSU variant"
+            REPO_URL="https://github.com/ShirkNeko/KernelSU.git"
+            REPO_URL2="ShirkNeko/KernelSU"
           else
             echo "Unknown variant"
           fi
@@ -193,17 +199,6 @@ jobs:
             fi
             KSU_REF=$COMMIT_HASH
             KSU_URL="https://github.com/$REPO_URL2/commit/$COMMIT_HASH"
-
-          else
-            # Fetch the specific tag
-            TAG=${{ inputs.kernelsu_branch_other }}
-            if git ls-remote --tags $REPO_URL | grep -q "refs/tags/$TAG"; then
-              KSU_REF=$TAG
-              KSU_URL="https://github.com/$REPO_URL2/releases/tag/$TAG"
-            else
-              echo "Error: Specified tag '$TAG' not found in KernelSU-Next" >&2
-              exit 1
-            fi
           fi
 
           # Echo the values to GitHub environment for later use
@@ -246,22 +241,29 @@ jobs:
             echo "This is the Official variant"
             echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
             echo "$RELEASE_NOTES" >> $GITHUB_ENV
-            echo "Official Manager:" >> $GITHUB_ENV
+            echo "Official 管理器:" >> $GITHUB_ENV
             echo "-> https://github.com/tiann/KernelSU" >> $GITHUB_ENV
             echo "EOF" >> $GITHUB_ENV
           elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "This is the Next variant"
             echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
             echo "$RELEASE_NOTES" >> $GITHUB_ENV
-            echo "Next Manager:" >> $GITHUB_ENV
+            echo "Next 管理器:" >> $GITHUB_ENV
             echo "-> https://github.com/KernelSU-Next/KernelSU-Next" >> $GITHUB_ENV
             echo "EOF" >> $GITHUB_ENV
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "This is the MKSU variant"
             echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
             echo "$RELEASE_NOTES" >> $GITHUB_ENV
-            echo "MKSU Manager:" >> $GITHUB_ENV
+            echo "MKSU 管理器:" >> $GITHUB_ENV
             echo "-> https://github.com/5ec1cff/KernelSU" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+            echo "This is the SukiSU variant"
+            echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+            echo "$RELEASE_NOTES" >> $GITHUB_ENV
+            echo "SukiSU Manager:" >> $GITHUB_ENV
+            echo "-> https://github.com/ShirkNeko/KernelSU" >> $GITHUB_ENV
             echo "EOF" >> $GITHUB_ENV
           else
             echo "Unknown variant"
@@ -344,16 +346,16 @@ jobs:
           echo "GitHub release created with the following files:"
           ls ./downloaded-artifacts/**/*
 
-      - name: send telegram message on push
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
-        run: |
-          curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-            -d "chat_id=$TELEGRAM_CHAT_ID" \
-            -d "message_thread_id=$TELEGRAM_MESSAGE_THREAD_ID" \
-            -d "text=Latest release: 
-            https://github.com/WildPlusKernel/GKI_KernelSU_SUSFS/releases/tag/${{ env.NEW_TAG }}
+      # - name: send telegram message on push
+      #   env:
+      #     TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      #     TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      #     TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
+      #   run: |
+      #     curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+      #       -d "chat_id=$TELEGRAM_CHAT_ID" \
+      #       -d "message_thread_id=$TELEGRAM_MESSAGE_THREAD_ID" \
+      #       -d "text=Latest release: 
+      #       https://github.com/WildPlusKernel/GKI_KernelSU_SUSFS/releases/tag/${{ env.NEW_TAG }}
             
-            ${{ env.RELEASE_NOTES }}"
+      #       ${{ env.RELEASE_NOTES }}"
