@@ -129,7 +129,7 @@ jobs:
         -> BBR 支持
 
         备注:
-        -> SUS SU 模式 2 将显示为禁用或不兼容，原因是不使用 kprobe 钩子（编译内核时），并且不再需要！
+        -> 在SUS SU 模式 2 下, 将显示为禁用或不兼容, 原因是(编译内核时)使用了非kprobe钩子 ,并且不再需要(非kprobe钩子)!
         -> 在最新版的susfs, 使用Kernel Flasher刷入AK3压缩包会变砖, 尝试 https://github.com/libxzr/HorizonKernelFlasher!
 
         模块: 
@@ -277,10 +277,9 @@ jobs:
           echo "" >> $GITHUB_ENV
           echo "LTO: thin" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
-          echo "提交的哈希值与链接:" >> $GITHUB_ENV
-          echo "KernelSU:" >> $GITHUB_ENV
-          echo "${{ inputs.kernelsu_variant }}-${{ inputs.kernelsu_branch }}: [$KSU_REF]($KSU_URL)" >> $GITHUB_ENV
-          echo "SUSFS4KSU:" >> $GITHUB_ENV
+          echo "提交的哈希值与链接(以下提交指的是,本次编译时,KSU或SUSFS所在的进度):" >> $GITHUB_ENV
+          echo "KernelSU为${{ inputs.kernelsu_variant }}-${{ inputs.kernelsu_branch }},提交: [$KSU_REF]($KSU_URL)" >> $GITHUB_ENV
+          echo "SUSFS4KSU(提交):" >> $GITHUB_ENV
           echo "gki-android12-5.10: [$COMMIT_HASH_gki_android12_5_10]($COMMIT_URL_gki_android12_5_10)" >> $GITHUB_ENV
           echo "gki-android13-5.10: [$COMMIT_HASH_gki_android13_5_10]($COMMIT_URL_gki_android13_5_10)" >> $GITHUB_ENV
           echo "gki-android13-5.15: [$COMMIT_HASH_gki_android13_5_15]($COMMIT_URL_gki_android13_5_15)" >> $GITHUB_ENV
