@@ -199,6 +199,15 @@ jobs:
             fi
             KSU_REF=$COMMIT_HASH
             KSU_URL="https://github.com/$REPO_URL2/commit/$COMMIT_HASH"
+          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev(开发)" || "${{ inputs.kernelsu_variant }}" == "SukiSU" ]]; then
+            # Fetch the latest commit from "next" branch
+            COMMIT_HASH=$(git ls-remote $REPO_URL refs/heads/$KSU_BRANCH | awk '{ print $1 }')
+            if [[ -z "$COMMIT_HASH" ]]; then
+              echo "Error: Could not fetch latest commit for Dev" >&2
+              exit 1
+            fi
+            KSU_REF=$COMMIT_HASH
+            KSU_URL="https://github.com/$REPO_URL2/commit/$COMMIT_HASH"
           fi
 
           # Echo the values to GitHub environment for later use
