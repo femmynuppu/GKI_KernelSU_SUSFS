@@ -102,6 +102,9 @@ jobs:
 
   trigger-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
     needs:
         - build-kernel-a12-5-10
         - build-kernel-a13-5-10
@@ -113,7 +116,7 @@ jobs:
     env:
       REPO_OWNER: zzh20188
       REPO_NAME: GKI_KernelSU_SUSFS
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.ZZH_TOKEN }}
       RELEASE_NAME: "*测试构建* GKI 内核 KernelSU-${{ inputs.kernelsu_variant }} ${{ inputs.kernelsu_branch }} & SUSFS v1.5.5 *测试构建*"
       RELEASE_NOTES: |
         此发布包含 KernelSU-${{ inputs.kernelsu_variant }} ${{ inputs.kernelsu_branch }} 和 SUSFS v1.5.5
@@ -141,13 +144,13 @@ jobs:
         uses: actions/checkout@v3
 
       - name: 确定分支为 KernelSU-${{ inputs.kernelsu_variant }}
-        if: ${{ inputs.kernelsu_branch == 'Dev(开发)' || inputs.kernelsu_variant == 'MKSU' }}
+        if: ${{ inputs.kernelsu_branch == 'Dev(开发)' || inputs.kernelsu_variant == 'MKSU' || inputs.kernelsu_variant == 'SukiSU'  }}
         run: |
           # Determine the branch based on user input
           if [[ "${{ inputs.kernelsu_variant }}" == "Official" || "${{ inputs.kernelsu_variant }}" == "MKSU" ]]; then
             BRANCH="main"
           elif [[ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]]; then
-            BRANCH="next"
+            BRANCH="main"
           elif [[ "${{ inputs.kernelsu_variant }}" == "Next" ]]; then
             BRANCH="main"
           else
