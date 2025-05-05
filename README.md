@@ -24,7 +24,7 @@
 
 <summary>还支持这几种算法，可在scene的ZRAM切换</summary>
 
-### LZ4K、LZ4HC、deflate、842、zstd
+### LZ4K、LZ4HC、deflate、842、zstdn、lz4k_oplus
 
 </details>
 

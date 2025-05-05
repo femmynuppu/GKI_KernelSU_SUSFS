@@ -131,6 +131,7 @@ jobs:
         -> Wireguard 支持
         -> BBR 支持
         -> **LZ4KD** 支持
+        -> **ZSTDN&ONEPLUS_LZ4K** 支持
 
         备注:
         -> 在SUS SU 模式 2 下, 将显示为禁用或不兼容, 原因是(编译内核时)使用了非kprobe钩子 ,并且不再需要(非kprobe钩子)!
