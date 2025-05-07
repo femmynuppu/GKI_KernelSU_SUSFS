@@ -24,15 +24,37 @@
 
 <summary>还支持这几种算法，可在scene的ZRAM切换</summary>
 
-### LZ4K、LZ4HC、deflate、842、zstdn、lz4k_oplus
+### LZ4K、LZ4HC、deflate、842、~~zstdn~~、lz4k_oplus
 
 </details>
 
+### 救援
+> [!IMPORTANT]
+> 当你错误的刷入内核，或者刷入手机不支持的内核，导致手机无法开机，您需要**救砖**！
+
+无论如何，使用Anykernel.zip或boot.img刷入，都只会修改您的boot分区。
+因此，只需要在**FASTBOOT模式**恢复为原来的分区即可开机；前提是你已经获得了**正常的boot镜像**（boot.img）
+如果你已经拥有镜像，那么可以使用fastboot命令救砖了！（如果您不会使用命令行，那么可以试试带界面的软件）
+```shell
+$ fastboot flash boot <boot.img文件全称>
+```
+在未获得手机boot镜像的情况下，可以通过该[方法](https://magiskcn.com/payload-dumper-compose.html)取得。
+
+或者从卡刷包中解包，或从线刷包中直接得到。
+**紧急情况下，建议在社区查找是否有人分享原版boot，或者发帖求助**
+
+
 > [!TIP]
+> 0.就算手机的GKI版本为5.10.**168**也是可以刷5.10.**198**的内核的，其他以此类推！
+>
+>
 > 1.在MT管理器的终端输入 `uname -r`获取内核版本号，然后在Action面板编译时输入这个版本号，可以伪装内核
 >
 >
 > 2.在[workflow文件夹](https://github.com/zzh20188/GKI_KernelSU_SUSFS/tree/dev/.github/workflows)中，修改例如**kernel-a12-5.10.yml**文件，可以减少你不需要的GKI版本，增加编译速度；或者添加指定的GKI版本，可参考[修改为指定GKI版本](https://www.coolapk.com/feed/62820671?shareKey=OGMxYmZmNTk0YzIxNjgxNzM1MzI~&shareUid=11253396&shareFrom=com.coolapk.market_15.2.2)
+>
+>
+> 3.有些GKI版本（如5.10.66）在`ubuntu-latest`编译会失败，故被删除；KPM在6.6内核疑似有BUG，故编译后不会进行KPM补丁。
 
 ### 更多内容
 可以提及您的意见...我会尝试！

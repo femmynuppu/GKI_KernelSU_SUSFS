@@ -26,6 +26,16 @@ on:
         required: false
         type: string
         default: ""
+      use_zram:
+        description: '是否开启增加更多ZRAM算法?'
+        required: true
+        type: boolean
+        default: true
+      use_kpm:
+        description: '是否开启KPM功能?'
+        required: true
+        type: boolean
+        default: true
   
 jobs:
   build-kernel-a12-5-10-kernelsu-susfs:
@@ -73,3 +83,5 @@ jobs:
       kernelsu_branch: ${{ inputs.kernelsu_branch || 'Dev' }}
       # kernelsu_branch_other: ${{ inputs.kernelsu_branch_other || '' }}
       version: ${{ inputs.version || '' }}
+      use_zram: ${{ inputs.use_zram }}
+      use_kpm: ${{ inputs.use_kpm }}
