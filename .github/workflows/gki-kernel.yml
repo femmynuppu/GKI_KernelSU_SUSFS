@@ -79,7 +79,7 @@ jobs:
           ccache --max-size=2G
           ccache --set-config=compression=true
           echo "CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
-      
+
       - name: 从缓存中还原ccache
         uses: actions/cache@v4
         with:
@@ -87,7 +87,7 @@ jobs:
           key: ${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.sub_level }}-ccache-${{ github.sha }}
           restore-keys: |
             ${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.sub_level }}-ccache-
-      
+
       - name: 缓存工具链
         id: cache-toolchain
         uses: actions/cache@v4
@@ -193,7 +193,7 @@ jobs:
             echo "Error: Custom branch not provided for 'Other(其他/指定)'" >&2
             exit 1
           fi
-      
+
       - name: 添加 KernelSU
         run: |
           echo "Changing to configuration directory: $CONFIG..."
@@ -212,19 +212,19 @@ jobs:
             echo "Adding KernelSU SukiSU..."
             curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
           fi
-          
+
       - name: 为 KernelSU 变体安装 SUSFS 补丁
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
-          
+
           echo "Applying SUSFS patches..."
-          
+
           # Copy SUSFS patches
           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch ./common/
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-  
+
           if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
             echo "Applying SUSFS patches for Official KernelSU..."
             cd ./KernelSU
@@ -240,7 +240,7 @@ jobs:
              cd ./KernelSU
             cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
             patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
-            
+
             echo "Applying MKSU specific SUSFS patch..."
             cp ../../kernel_patches/mksu/mksu_susfs.patch ./
             patch -p1 < mksu_susfs.patch || true
@@ -249,8 +249,8 @@ jobs:
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying SUSFS patches for SukiSU..."
              cd ./KernelSU
-            
-            
+
+
             echo "Applying SukiSU specific SUSFS patch..."
           else
             echo "Invalid KernelSU variant selected!"
@@ -280,7 +280,7 @@ jobs:
             cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
             patch -p1 -F 3 < syscall_hooks.patch
           fi
-          
+
       - name: 复制源文件&应用LZ4KD&ZSTDN补丁
         run: |
           echo "Changing to configuration directory: $CONFIG..."
@@ -288,18 +288,17 @@ jobs:
           cp -r ../../SukiSU_patch/other/zram/lz4k/include/linux/* ./include/linux/
           cp -r ../../SukiSU_patch/other/zram/lz4k/lib/* ./lib/
           cp -r ../../SukiSU_patch/other/zram/lz4k/crypto/* ./crypto/
-          cp -r ../../SukiSU_patch/other/zram/zstdn ./lib/
           cp -r ../../SukiSU_patch/other/zram/lz4k_oplus ./lib/
-          
+
           cp ../../SukiSU_patch/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
           echo "正在打lz4kd补丁"
           patch -p1 -F 3 < lz4kd.patch || true
           echo '完成LZ4KD补丁'
 
-          cp ../../SukiSU_patch/other/zram/zram_patch/${{ inputs.kernel_version }}/zstdn.patch ./
-          echo "正在打zstdn补丁"
-          patch -p1 -F 3 < zstdn.patch || true
-          echo '完成ZSTDN补丁'
+          cp ../../SukiSU_patch/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
+          echo "正在打lz4k_oplus补丁"
+          patch -p1 -F 3 < lz4k_oplus.patch || true
+          echo '完成lz4k_oplus补丁'
 
       - name: 应用隐藏某特征的补丁
         run: |
@@ -313,8 +312,8 @@ jobs:
             cp ../../kernel_patches/69_hide_stuff.patch ./
             patch -p1 -F 3 < 69_hide_stuff.patch
           fi
-      
-      - name: LZ4KD&ZSTDN配置
+
+      - name: LZ4KD&Lz4k_oplus配置
         run: |
           echo "写入LZ4KD&ZSTDN config依赖"
           CONFIG_FILE="$CONFIG/common/arch/arm64/configs/gki_defconfig"
@@ -336,7 +335,7 @@ jobs:
                 echo "警告：文件 $CONFIG_FILE 不包含字符串 CONFIG_ZSMALLOC。"
                 echo "CONFIG_ZSMALLOC=y" >> "$CONFIG_FILE"
             fi
-                
+
             sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' "$CONFIG_FILE"
           fi
 
@@ -347,12 +346,11 @@ jobs:
 
           if [ "${{ inputs.android_version }}" = "android14" ] || [ "${{ inputs.android_version }}" = "android15" ]; then
             sed -i 's/"drivers\/block\/zram\/zram\.ko",//g; s/"mm\/zsmalloc\.ko",//g' "$CONFIG/common/modules.bzl"
-            sed -i '/^_ARM64_GKI_MODULES_LIST = \[/a \    "lib/zstdn/crypto_zstdn.ko",' "$CONFIG/common/modules.bzl"
             echo "CONFIG_MODULE_SIG_FORCE=n" >> "$CONFIG_FILE"
             echo 'Android14_Bazel:已修复zram&zsmalloc'
           elif [ "${{ inputs.kernel_version }}" = "5.10" ] || [ "${{ inputs.kernel_version }}" = "5.15" ]; then
             rm "$CONFIG/common/android/gki_aarch64_modules"
-            echo 'lib/zstdn/crypto_zstdn.ko' > $CONFIG/common/android/gki_aarch64_modules
+            touch "$CONFIG/common/android/gki_aarch64_modules"
             echo '5.10&5.15:已修复zram&zsmalloc'
           fi
 
@@ -361,11 +359,10 @@ jobs:
             echo "CONFIG_CRYPTO_LZ4K=y" >> "$CONFIG_FILE"
             echo "CONFIG_CRYPTO_LZ4KD=y" >> "$CONFIG_FILE"
             echo "CONFIG_CRYPTO_842=y" >> "$CONFIG_FILE"
-            echo "CONFIG_CRYPTO_ZSTDN=m" >> "$CONFIG_FILE"
             echo "CONFIG_CRYPTO_LZ4K_OPLUS=y" >> "$CONFIG_FILE"
           fi
-          
-      
+
+
       - name: 添加所有管理器
         run: |
           cd "$CONFIG"
@@ -394,7 +391,7 @@ jobs:
 
           # Add KSU configuration settings
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
-          
+
           if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "CONFIG_KSU_WITH_KPROBES=n" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
@@ -416,12 +413,12 @@ jobs:
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
 
           # Add BBR Config
-          echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./common/arch/arm64/configs/gki_defconfig 
+          echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_BBR=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_NET_SCH_FQ=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_BIC=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_WESTWOOD=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_HTCP=n" >> ./common/arch/arm64/configs/gki_defconfig 
+          echo "CONFIG_TCP_CONG_HTCP=n" >> ./common/arch/arm64/configs/gki_defconfig
 
           # Remove check_defconfig
           sed -i 's/check_defconfig//' ./common/build.config.gki
@@ -443,7 +440,7 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
 
-      
+
       - name: 配置内核名称
         run: |
           echo "Changing to configuration directory: $CONFIG..."
@@ -460,7 +457,7 @@ jobs:
 
           # Run perl command to modify UTS_VERSION
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
-          
+
           echo "Building the kernel..."
           if [ -f "build/build.sh" ]; then
             sed -i 's/-dirty//' ./common/scripts/setlocalversion
@@ -515,7 +512,7 @@ jobs:
             mv oImage Image
             cd ../../..
           fi
-            
+
       - name: 创建Bootimgs文件夹并复制镜像
         if: ${{ inputs.android_version == 'android12' || inputs.android_version == 'android13' }}
         run: |
