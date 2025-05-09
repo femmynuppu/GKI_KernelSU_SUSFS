@@ -139,12 +139,13 @@ jobs:
       REPO_OWNER: zzh20188
       REPO_NAME: GKI_KernelSU_SUSFS
       GITHUB_TOKEN: ${{ secrets.ZZH_TOKEN }}
-      RELEASE_NAME: "GKI内核: KernelSU-${{ inputs.kernelsu_variant }} ${{ inputs.kernelsu_branch }} & SUSFS v1.5.7"
+      RELEASE_NAME: "GKI内核: ${{ inputs.kernelsu_variant == 'Next' && 'KernelSU' || '' }}-${{ inputs.kernelsu_variant }} ${{ inputs.kernelsu_branch }} & SUSFS v1.5.7"
       RELEASE_NOTES: |
-        此发布包含 KernelSU-${{ inputs.kernelsu_variant }} ${{ inputs.kernelsu_branch }} 、SUSFS v1.5.7 、 LZ4KD
-        
+        此发布包含 **${{ inputs.kernelsu_variant == 'Next' && 'KernelSU' || '' }}-${{ inputs.kernelsu_variant }} ${{ inputs.kernelsu_branch }},请注意此处的KSU版本** 、SUSFS v1.5.7 、 LZ4KD
+        **禁止眼睛失明者询问->为什么我下的不是xxx KSU**
+
         功能:
-        -> KernelSU-${{ inputs.kernelsu_variant }}-${{ inputs.kernelsu_branch }}
+        -> ${{ inputs.kernelsu_variant == 'Next' && 'KernelSU' || '' }}-${{ inputs.kernelsu_variant }}-${{ inputs.kernelsu_branch }}
         -> SUSFS ඞ v1.5.7
         -> 手动Syscall Hooks,实现更好的隐藏效果
         -> Magic Mount 支持
@@ -291,7 +292,7 @@ jobs:
             echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
             echo "$RELEASE_NOTES" >> $GITHUB_ENV
             echo "SukiSU 管理器:" >> $GITHUB_ENV
-            echo "-> https://github.com/ShirkNeko/KernelSU" >> $GITHUB_ENV
+            echo "-> https://github.com/ShirkNeko/SukiSU-Ultra" >> $GITHUB_ENV
             echo "EOF" >> $GITHUB_ENV
           else
             echo "Unknown variant"
