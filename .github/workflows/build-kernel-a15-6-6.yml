@@ -27,7 +27,7 @@ on:
           - Other(其他/指定)
         default: Dev(开发)
       version:
-        description: '自定义版本名(如6.6.66后面的字符/留空则使用默认版本号)'
+        description: '自定义版本名(如位于6.6.77-android15-8<自定义版本名>/留空则使用默认版本号)'
         required: false
         type: string
       use_zram:
