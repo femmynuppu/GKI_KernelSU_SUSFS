@@ -69,4 +69,4 @@ jobs:
       kernelsu_branch: ${{ inputs.kernelsu_branch || 'Dev' }}
       version: ${{ inputs.version || '' }}
       use_zram: ${{ inputs.use_zram }}
-      use_kpm: false
+      use_kpm: ${{ inputs.use_kpm }}

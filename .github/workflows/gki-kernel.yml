@@ -186,20 +186,29 @@ jobs:
 
       - name: 确定 KernelSU 的分支
         run: |
-          if [[ "${{ inputs.kernelsu_branch }}" == "Stable(标准)" ]]; then
+          branch_input="${{ inputs.kernelsu_branch }}"
+          variant_input="${{ inputs.kernelsu_variant }}"
+          
+          case "$branch_input" in
+            "Stable(标准)")
               echo "BRANCH=-" >> $GITHUB_ENV
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev(开发)" && ( "${{ inputs.kernelsu_variant }}" == "Official" || "${{ inputs.kernelsu_variant }}" == "MKSU" ) ]]; then
-              echo "BRANCH=-s main" >> $GITHUB_ENV
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev(开发)" && "${{ inputs.kernelsu_variant }}" == "Next" ]]; then
-              echo "BRANCH=-s next" >> $GITHUB_ENV
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Stable(标准)" && ( "${{ inputs.kernelsu_variant }}" == "SukiSU" ) ]]; then
-              echo "BRANCH=-" >> $GITHUB_ENV
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev(开发)" && ( "${{ inputs.kernelsu_variant }}" == "SukiSU" ) ]]; then
-              echo "BRANCH=-s susfs-dev" >> $GITHUB_ENV
-          else
-            echo "Error: Custom branch not provided for 'Other(其他/指定)'" >&2
-            exit 1
-          fi
+              ;;
+            "Dev(开发)")
+              case "$variant_input" in
+                "Official" | "MKSU") echo "BRANCH=-s main" >> $GITHUB_ENV ;;
+                "Next")              echo "BRANCH=-s next" >> $GITHUB_ENV ;;
+                "SukiSU")           echo "BRANCH=-s susfs-dev" >> $GITHUB_ENV ;;
+                *) 
+                  echo "错误：未定义开发分支的变体 '$variant_input'" >&2
+                  exit 1
+                  ;;
+              esac
+              ;;
+            *)
+              echo "错误：需要自定义分支时未提供参数" >&2
+              exit 1
+              ;;
+          esac
 
       - name: 添加 KernelSU
         run: |
@@ -444,9 +453,9 @@ jobs:
 
 
           # Run perl command to modify UTS_VERSION
-          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
-
-          echo "Building the kernel..."
+          CURRENT_TIME=$(date -u +"%a %b %d %H:%M:%S UTC %Y")
+          echo "CURRENT_TIME=$CURRENT_TIME"
+          perl -pi -e "s{UTS_VERSION=\"\\\$\(echo \\\$UTS_VERSION \\\$CONFIG_FLAGS \\\$TIMESTAMP \\| cut -b -\\\$UTS_LEN\)\"}{UTS_VERSION=\"#1 SMP PREEMPT $CURRENT_TIME\"}" ./common/scripts/mkcompile_h
           if [ -f "build/build.sh" ]; then
             sed -i 's/-dirty//' ./common/scripts/setlocalversion
           else
