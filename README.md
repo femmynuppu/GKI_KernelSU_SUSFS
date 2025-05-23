@@ -1,8 +1,7 @@
 ### 这是一个自动构建GKI内核的仓库
 
-> 本仓库仅支持GKI设备，[在此](https://source.android.com/docs/core/architecture/kernel/gki-release-builds?hl=zh-cn)查看您的设备是否支持
-
-> 非GKI和一加设备可以尝试[SukiSU云盘](https://alist.shirkneko.top)的资源
+> 非GKI可以尝试[SukiSU云盘](https://alist.shirkneko.top)的资源
+> 第一次使用务必**详细阅读**以下内容，不要因为懒惰而占用他人时间！
 ### 下载
 可以[在此](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases)下载您的资源
 1. 关于Anykernel3.zip，下载即用！
@@ -26,6 +25,12 @@
 ### LZ4K、LZ4HC、deflate、842、~~zstdn~~、lz4k_oplus
 
 </details>
+
+### KSU管理器
+在编译完成后，你会看到类似 `Next-Manager(12600)`的文件，简单来说这就是与内核一同上传的***最新管理器***。
+![例子](./assets/get_manager.gif)
+同样的，在[Release](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases)也同样包含***最新管理器***！
+![release](./assets/release_manager.gif)
 
 ### 紧急救援指南
 
