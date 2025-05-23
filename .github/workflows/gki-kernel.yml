@@ -259,7 +259,7 @@ jobs:
           #   echo '应用KSUN临时修复补丁'
           #   patch -p1 --forward < fix_ksun_susfs.patch
             sed -i '/bool ksu_devpts_hook = false;/d' ./kernel/sucompat.c
-          # elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
+          elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "Applying SUSFS patches for MKSU..."
              cd ./KernelSU
             cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
