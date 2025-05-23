@@ -248,7 +248,7 @@ jobs:
             patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch
           elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
           #   echo "Applying SUSFS patches for KernelSU-Next..."
-          #   cd ./KernelSU-Next
+             cd ./KernelSU-Next
           #   curl -LSs https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/dev/0001-kernel-patch-susfs-v1.5.7-to-KernelSU-Next-v1.0.7.patch -o susfs.patch 
           #   patch -p1 --forward < susfs.patch
 
