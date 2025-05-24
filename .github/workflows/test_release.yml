@@ -164,7 +164,7 @@ jobs:
         -> 徒劳隐藏 jit-zygote-cache 检测
         -> Wireguard 支持
         -> BBR 支持
-        -> KPM ${{ inputs.use_kpm && '支持' || '不支持' }}
+        -> KPM ${{ inputs.kernelsu_variant == "SukiSU" && '支持' || '不支持' }}
         -> **LZ4KD&ONEPLUS_LZ4K**  ${{ inputs.use_zram && '支持' || '不支持' }}
         
         备注:
