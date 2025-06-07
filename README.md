@@ -81,9 +81,10 @@ $ fastboot flash boot <boot.img文件全称>
 > 获取后直接复制，将此版本号填入Action编译面板即可实现内核版本伪装。
 > 
 > **3. 编译优化建议**  
-> 修改 [workflow配置文件](https://github.com/zzh20188/GKI_KernelSU_SUSFS/tree/dev/.github/workflows)（如kernel-a12-5.10.yml）：
+> 修改 [配置文件](.github/workflows/kernel-a12-5.10.yml)（如kernel-a12-5.10.yml）：
 > - ▶️ 删除/注释不需要的GKI版本配置（**加速编译**）
 > - ➕ 添加指定GKI版本（参考[定制指南](https://www.coolapk.com/feed/62820671?shareKey=OGMxYmZmNTk0YzIxNjgxNzM1MzI~&shareUid=11253396&shareFrom=com.coolapk.market_15.2.2)）
+> - 📅 内核构建时间，参照[gki-kernel.yml](.github/workflows/gki-kernel.yml) 文件 **`第490行左右的注释`** 进行修改
 > 
 > **4. 已知兼容性问题**  
 > - 6.6.x内核暂不支持KPM补丁（存在兼容性问题）
