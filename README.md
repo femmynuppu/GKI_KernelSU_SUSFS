@@ -85,9 +85,6 @@ $ fastboot flash boot <boot.img文件全称>
 > - ▶️ 删除/注释不需要的GKI版本配置（**加速编译**）
 > - ➕ 添加指定GKI版本（参考[定制指南](https://www.coolapk.com/feed/62820671?shareKey=OGMxYmZmNTk0YzIxNjgxNzM1MzI~&shareUid=11253396&shareFrom=com.coolapk.market_15.2.2)）
 > - 📅 内核构建时间，参照[gki-kernel.yml](.github/workflows/gki-kernel.yml) 文件 **`第490行左右的注释`** 进行修改
-> 
-> **4. 已知兼容性问题**  
-> - 6.6.x内核暂不支持KPM补丁（存在兼容性问题）
 
 ### 更多内容
 可以提及您的意见...我会尝试！
