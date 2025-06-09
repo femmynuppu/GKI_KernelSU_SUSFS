@@ -371,6 +371,8 @@ jobs:
       - name: LZ4KD & Lz4k_oplus配置
         if: ${{ inputs.use_zram }}
         run: |
+          set -x
+          set -e
           echo "写入LZ4KD&ZSTDN config依赖"
           CONFIG_FILE="$CONFIG/common/arch/arm64/configs/gki_defconfig"
 
@@ -404,12 +406,6 @@ jobs:
             sed -i 's/"drivers\/block\/zram\/zram\.ko",//g; s/"mm\/zsmalloc\.ko",//g' "$CONFIG/common/modules.bzl"
             echo "CONFIG_MODULE_SIG_FORCE=n" >> "$CONFIG_FILE"
             echo 'Android14_Bazel:已修复zram&zsmalloc'
-          elif [ "${{ inputs.kernel_version }}" = "5.10" ] || [ "${{ inputs.kernel_version }}" = "5.15" ]; then
-            rm "$CONFIG/common/android/gki_aarch64_modules"
-            touch "$CONFIG/common/android/gki_aarch64_modules"
-            echo '5.10&5.15:已修复zram&zsmalloc'
-            sed -i 's/BUILD_SYSTEM_DLKM=1/BUILD_SYSTEM_DLKM=0/' $CONFIG/common/build.config.gki.aarch64
-            echo "加入zram补丁后,不创建dlkm镜像"
           fi
 
           if grep -q "CONFIG_ZSMALLOC=y" "$CONFIG_FILE" && grep -q "CONFIG_ZRAM=y" "$CONFIG_FILE"; then
@@ -516,6 +512,14 @@ jobs:
             set -e
             set -x
             cd "$CONFIG"
+            # 替换 BUILD_SYSTEM_DLKM=1 为 BUILD_SYSTEM_DLKM=0
+            sed -i 's/BUILD_SYSTEM_DLKM=1/BUILD_SYSTEM_DLKM=0/' common/build.config.gki.aarch64
+
+            # 删除 MODULES_ORDER=android/gki_aarch64_modules 行
+            sed -i '/MODULES_ORDER=android\/gki_aarch64_modules/d' common/build.config.gki.aarch64
+
+            sed -i '/KMI_SYMBOL_LIST_STRICT_MODE/d' common/build.config.gki.aarch64
+
             echo "Building the kernel..."
             if [ -f "build/build.sh" ]; then
               LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh CC="/usr/bin/ccache clang" || exit 1
