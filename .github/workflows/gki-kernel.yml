@@ -546,26 +546,30 @@ jobs:
                 export PATH="$GITHUB_WORKSPACE/$CONFIG/prebuilts/clang/host/linux-x86/$CLANG_VERSION/bin:$PATH"
                 export PATH="$GITHUB_WORKSPACE/$CONFIG/gcc/bin:$PATH"
                 export PATH="$GITHUB_WORKSPACE/$CONFIG/prebuilts/kernel-build-tools/linux-x86/bin:$PATH"
-                ls $GITHUB_WORKSPACE/$CONFIG/prebuilts/clang/host/linux-x86/*
+
                 echo "--- Clang Version ---"
                 clang --version
                 echo "--- GCC Version ---"
                 aarch64-linux-gnu-gcc -v
 
-                MAKE_PARAMS=(
-                    -j$(nproc --all)
-                    O=out
-                    ARCH=arm64
-                    LLVM=1
-                    CROSS_COMPILE=aarch64-linux-gnu-
-                    Image Image.lz4 Image.gz
-                )
-                    
-                echo "--- Running make gki_defconfig ---"
-                make "${MAKE_PARAMS[@]}" gki_defconfig || { echo "make defconfig failed"; exit 1; }
-                    
-                echo "--- Running make ---"
-                make "${MAKE_PARAMS[@]}" || { echo "make failed"; exit 1; }
+                COMMON_MAKE_PARAMS=(
+                  -j$(nproc --all)
+                  O=out
+                  ARCH=arm64
+                  LLVM=1
+                  CROSS_COMPILE=aarch64-linux-gnu-
+              )
+
+              BUILD_TARGETS=(
+                  Image
+                  Image.lz4
+                  Image.gz
+                  modules
+              )
+              
+              echo "--- Running make gki_defconfig ---"
+              make "${COMMON_MAKE_PARAMS[@]}" gki_defconfig || { echo "make defconfig failed"; exit 1; }
+              make "${COMMON_MAKE_PARAMS[@]}" "${BUILD_TARGETS[@]}" || { echo "make failed"; exit 1; }
             fi
             ccache --show-stats
             mkdir -p ../bazel-bin/common/kernel_aarch64/
