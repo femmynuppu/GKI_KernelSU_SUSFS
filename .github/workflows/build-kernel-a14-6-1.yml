@@ -45,6 +45,11 @@ on:
         required: true
         type: boolean
         default: true
+      fast:
+        description: '编译加速(实验性):平均加快7分钟'
+        required: false
+        type: boolean
+        default: false
 jobs:
 
   build-kernel-a14-6-1:
@@ -57,6 +62,7 @@ jobs:
       version: ${{ inputs.version }}
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
+      fast: ${{ inputs.fast }}
   get-ksu-manager:
     if: ${{ inputs.get_manager }}
     uses: ./.github/workflows/get-manager.yml
