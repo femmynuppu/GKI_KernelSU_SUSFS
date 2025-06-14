@@ -49,6 +49,10 @@ on:
         required: true
         type: boolean
         default: false
+      fast:
+        required: false
+        type: boolean
+        default: false
 jobs:
   build-kernel-kernelsu-susfs:
     runs-on: ubuntu-latest
@@ -514,17 +518,16 @@ jobs:
             set -e
             set -x
             cd "$CONFIG"
-            # 替换 BUILD_SYSTEM_DLKM=1 为 BUILD_SYSTEM_DLKM=0
+
             sed -i 's/BUILD_SYSTEM_DLKM=1/BUILD_SYSTEM_DLKM=0/' common/build.config.gki.aarch64
-
-            # 删除 MODULES_ORDER=android/gki_aarch64_modules 行
             sed -i '/MODULES_ORDER=android\/gki_aarch64_modules/d' common/build.config.gki.aarch64
-
             sed -i '/KMI_SYMBOL_LIST_STRICT_MODE/d' common/build.config.gki.aarch64
 
             echo "Building the kernel..."
             if [ -f "build/build.sh" ]; then
               LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh CC="/usr/bin/ccache clang" || exit 1
+            elif [ ! "${{ inputs.fast }}" ]; then
+              tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast --lto=thin //common:kernel_aarch64_dist || exit 1
             else
               case "${{ inputs.kernel_version }}" in
                   "6.1")
@@ -570,10 +573,11 @@ jobs:
               echo "--- Running make gki_defconfig ---"
               make "${COMMON_MAKE_PARAMS[@]}" gki_defconfig || { echo "make defconfig failed"; exit 1; }
               make "${COMMON_MAKE_PARAMS[@]}" "${BUILD_TARGETS[@]}" || { echo "make failed"; exit 1; }
+  
+              mkdir -p ../bazel-bin/common/kernel_aarch64/
+              cp ./out/arch/arm64/boot/Image* ../bazel-bin/common/kernel_aarch64/
             fi
-            ccache --show-stats
-            mkdir -p ../bazel-bin/common/kernel_aarch64/
-            cp ./out/arch/arm64/boot/Image* ../bazel-bin/common/kernel_aarch64/
+            
       - name: 修补 Image 文件 安卓12和安卓13(仅限sukisu)
         if: ${{ inputs.use_kpm && inputs.kernelsu_variant == 'SukiSU' && (inputs.android_version == 'android12' || inputs.android_version == 'android13') }}
         run: |
