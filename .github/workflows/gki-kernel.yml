@@ -82,8 +82,8 @@ jobs:
           echo "CONFIG set to: $CONFIG"
 
       # Install ccache
-      - name: 安装 ccache
-        run: sudo apt update && sudo apt upgrade -y && sudo apt install -y ccache python3 git curl
+      - name: 安装 依赖
+        run: sudo apt update && sudo apt upgrade -y && sudo apt install -y ccache python3 git curl build-essential libssl-dev bison flex libelf-dev dwarves
 
       - name: 配置 ccache
         run: |
@@ -172,7 +172,8 @@ jobs:
           echo "Creating folder for configuration: $CONFIG..."
           mkdir -p "$CONFIG"
           cd "$CONFIG"
-
+          git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-gnu-6.4.1.git gcc
+          ls gcc/bin
           # Initialize and sync kernel source
           echo "Initializing and syncing kernel source..."
           FORMATTED_BRANCH="${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.os_patch_level }}"
@@ -525,10 +526,50 @@ jobs:
             if [ -f "build/build.sh" ]; then
               LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh CC="/usr/bin/ccache clang" || exit 1
             else
-              tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast --lto=thin //common:kernel_aarch64_dist || exit 1
+              case "${{ inputs.kernel_version }}" in
+                  "6.1")
+                      CLANG_VERSION="clang-r487747c"
+                      ;;
+                  "6.6")
+                      CLANG_VERSION="clang-r510928"
+                      ;;
+                  *)
+                      echo "Error: Unsupported kernel_version: '${{ inputs.kernel_version }}'"
+                      exit 1
+                      ;;
+                esac
+
+                echo "Using Clang version: $CLANG_VERSION for Kernel version: ${{ inputs.kernel_version }}"
+
+                cd common
+
+                export PATH="$GITHUB_WORKSPACE/$CONFIG/prebuilts/clang/host/linux-x86/$CLANG_VERSION/bin:$PATH"
+                export PATH="$GITHUB_WORKSPACE/$CONFIG/gcc/bin:$PATH"
+                export PATH="$GITHUB_WORKSPACE/$CONFIG/prebuilts/kernel-build-tools/linux-x86/bin:$PATH"
+                ls $GITHUB_WORKSPACE/$CONFIG/prebuilts/clang/host/linux-x86/*
+                echo "--- Clang Version ---"
+                clang --version
+                echo "--- GCC Version ---"
+                aarch64-linux-gnu-gcc -v
+
+                MAKE_PARAMS=(
+                    -j$(nproc --all)
+                    O=out
+                    ARCH=arm64
+                    LLVM=1
+                    CROSS_COMPILE=aarch64-linux-gnu-
+                    Image Image.lz4 Image.gz
+                )
+                    
+                echo "--- Running make gki_defconfig ---"
+                make "${MAKE_PARAMS[@]}" gki_defconfig || { echo "make defconfig failed"; exit 1; }
+                    
+                echo "--- Running make ---"
+                make "${MAKE_PARAMS[@]}" || { echo "make failed"; exit 1; }
             fi
             ccache --show-stats
-            
+            mkdir -p ../bazel-bin/common/kernel_aarch64/
+            cp ./out/arch/arm64/boot/Image* ../bazel-bin/common/kernel_aarch64/
       - name: 修补 Image 文件 安卓12和安卓13(仅限sukisu)
         if: ${{ inputs.use_kpm && inputs.kernelsu_variant == 'SukiSU' && (inputs.android_version == 'android12' || inputs.android_version == 'android13') }}
         run: |
