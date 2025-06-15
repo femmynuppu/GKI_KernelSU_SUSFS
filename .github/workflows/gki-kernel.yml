@@ -287,7 +287,7 @@ jobs:
             cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
             patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
             curl -LSs https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/dev/FIX_NEXT.SUSFS.patch -o FIX_NEXT.SUSFS.patch 
-            patch -p1 --forward < FIX_NEXT.SUSFS.patch 
+            patch -p1 --forward --fuzz=3 < FIX_NEXT.SUSFS.patch 
 
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "Applying SUSFS patches for MKSU..."
