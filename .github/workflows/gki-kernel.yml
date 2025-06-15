@@ -220,12 +220,23 @@ jobs:
       
       - name: 确定 KernelSU 的分支
         run: |
+
           branch_input="${{ inputs.kernelsu_branch }}"
           variant_input="${{ inputs.kernelsu_variant }}"
-          
+
           case "$branch_input" in
             "Stable(标准)")
-              echo "BRANCH=-" >> $GITHUB_ENV
+              case "$variant_input" in
+                "Next")
+                  echo "BRANCH=-s next-susfs-dev" >> $GITHUB_ENV
+                  ;;
+                "SukiSU")
+                  echo "BRANCH=-s susfs-main" >> $GITHUB_ENV
+                  ;;
+                *)
+                  echo "BRANCH=-" >> $GITHUB_ENV
+                  ;;
+              esac
               ;;
             "Dev(开发)")
               case "$variant_input" in
@@ -281,14 +292,18 @@ jobs:
             cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
             patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch
           elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
-          # 临时恢复KSU-NEXT的dev编译
+            # 临时恢复KSU-NEXT的dev编译
             echo "Applying SUSFS patches for KernelSU-Next..."
             cd ./KernelSU-Next
-            cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
-            patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
-            curl -LSs https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/dev/FIX_NEXT.SUSFS.patch -o FIX_NEXT.SUSFS.patch 
-            patch -p1 --forward --fuzz=3 < FIX_NEXT.SUSFS.patch 
-
+            if [ "$BRANCH" == "-s next" ]; then
+              echo "当前为Dev分支的KernelSU-Next"
+              cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
+              patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
+              echo "应用临时修复补丁"
+              curl -LSs https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/dev/FIX_NEXT.SUSFS.patch -o FIX_NEXT.SUSFS.patch 
+              patch -p1 --forward --fuzz=3 < FIX_NEXT.SUSFS.patch 
+            fi
+            
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "Applying SUSFS patches for MKSU..."
              cd ./KernelSU
