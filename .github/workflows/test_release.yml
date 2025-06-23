@@ -401,12 +401,14 @@ jobs:
           release_name: ${{ env.RELEASE_NAME }} # Pass the RELEASE_NAME to the action
           body: ${{ env.RELEASE_NOTES }}  # Pass the RELEASE_NOTES to the action
 
+      - name: 上传KSU管理器
+        continue-on-error: true
+        run: |
+            echo "Uploading KSU管理器"
+            gh release upload ${{ env.NEW_TAG }} "./downloaded-artifacts/*Manager*/*"
+
       - name: 动态上传发布资产
         run: |
-          # 先传管理器
-          echo "Uploading $file..."
-          gh release upload ${{ env.NEW_TAG }} "./downloaded-artifacts/*Manager*/*"
-          # 再传其他
           for file in ./downloaded-artifacts/*_kernel-*/*; do
               # Skip directories
               if [ -d "$file" ]; then

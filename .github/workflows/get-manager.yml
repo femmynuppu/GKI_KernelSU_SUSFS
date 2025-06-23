@@ -47,6 +47,8 @@ jobs:
           fi
 
       - name: 添加 KernelSU
+        id: add_KSU
+        continue-on-error: true
         run: |
           if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "KernelSU Next..."
@@ -79,7 +81,12 @@ jobs:
           echo "Manager 文件已下载为：${{ inputs.kernelsu_variant }}-管理器(${{ env.KSU_VERSION }}).zip"
           unzip *.zip
 
+      - name: Notify on failure
+        if: steps.add_KSU.outcome == 'failure'
+        run: echo "下载CI构建的KSU失败!"
+
       - name: 上传编译资产
+        if: steps.add_KSU.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.kernelsu_variant }}-Manager(${{ env.KSU_VERSION }})
