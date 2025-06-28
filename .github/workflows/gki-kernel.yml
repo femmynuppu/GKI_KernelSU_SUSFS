@@ -542,7 +542,7 @@ jobs:
                         Android="-android14-11-g"
                         Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
                         Suffix="-ab$(shuf -i 13100000-13199999 -n 1)"
-                        Kversion="${Android}${Random_hash}${Suffix}"
+                        Kversion="${Android}${Random_hash}"
                       fi
                       echo $Kversion
                       sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion
@@ -557,7 +557,7 @@ jobs:
                         Android="-android15-8-g"
                         Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
                         Suffix="-ab$(shuf -i 13200000-13299999 -n 1)-4k"
-                        Kversion="${Android}${Random_hash}${Suffix}"
+                        Kversion="${Android}${Random_hash}-4k"
                       fi
                       echo $Kversion
                       sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion
