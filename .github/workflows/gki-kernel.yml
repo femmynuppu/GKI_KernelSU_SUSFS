@@ -161,21 +161,11 @@ jobs:
           # Clone repositories using the branch names
           git clone https://github.com/WildPlusKernel/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
-
-          # # SUSFS1.5.8在6.6有BUG,临时切换到1.5.7
-          # if [[ "${{ inputs.kernel_version }}" == "6.6" ]]; then
-          #   TARGET_COMMIT="09fec8aa1f39807788c526dd84429f6d92b805ae"
-          #   cd susfs4ksu
-          #   # -------------------------------- #
-          #   git checkout "$TARGET_COMMIT"
-          #   git log -1 --pretty=oneline
-          #   # -------------------------------- #
-          #   cd ..
-          # fi
-
           git clone https://github.com/WildPlusKernel/kernel_patches.git
           # Sukisu的补丁仓库
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
+          # next修复补丁
+          git clone https://github.com/zzh20188/GKI_KernelSU_SUSFS.git FIX_NEXT
           
       - name: 设置 CONFIG 环境变量
         run: |
@@ -318,8 +308,11 @@ jobs:
               cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
               patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
               echo "应用临时修复补丁"
-              curl -LSs https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/dev/FIX_NEXT.SUSFS.patch -o FIX_NEXT.SUSFS.patch 
-              patch -p1 --forward --fuzz=3 < FIX_NEXT.SUSFS.patch 
+              cp ../../FIX_NEXT/next-patch/* ./
+              patch -p1 --fuzz=3 --forward < apk_sign.patch
+              patch -p1 --fuzz=3 --forward < core_hook.patch
+              patch -p1 --fuzz=3 --forward < ksud.patch
+              patch -p1 --fuzz=3 --forward < selinux.patch
             fi
             
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
