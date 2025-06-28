@@ -530,29 +530,38 @@ jobs:
           fi
 
           if [ "${{ inputs.fast }}" == "true" ]; then
+            echo "启用快速编译：设置随机字符串或指定内容"
             case "${{ inputs.kernel_version }}" in
                   "6.1")
-                      Android="-android14-11-g"
-                      Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
-                      Suffix="-ab$(shuf -i 13100000-13199999 -n 1)"
-                      Kversion="${Android}${Random_hash}${Suffix}"
+                      echo "进入6.1 内核名称编辑"
+                      
                       if [ ! -z ${{ inputs.version }} ]; then
                         echo "版本号不为空"
                         Android="-android14-11"
                         Kversion="${Android}${{ inputs.version }}"
+                      else
+                        Android="-android14-11-g"
+                        Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
+                        Suffix="-ab$(shuf -i 13100000-13199999 -n 1)"
+                        Kversion="${Android}${Random_hash}${Suffix}"
                       fi
+                      echo $Kversion
                       sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion
                       ;;
                   "6.6")
-                      Android="-android15-8-g"
-                      Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
-                      Suffix="-ab$(shuf -i 13200000-13299999 -n 1)-4k"
-                      Kversion="${Android}${Random_hash}${Suffix}"
+                      echo "进入6.6 内核名称编辑"
+                      
                       if [ ! -z ${{ inputs.version }} ]; then
                         echo "版本号不为空"
                         Android="-android15-8"
                         Kversion="${Android}${{ inputs.version }}"
+                      else
+                        Android="-android15-8-g"
+                        Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
+                        Suffix="-ab$(shuf -i 13200000-13299999 -n 1)-4k"
+                        Kversion="${Android}${Random_hash}${Suffix}"
                       fi
+                      echo $Kversion
                       sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion
                       ;;
                   *)
@@ -561,6 +570,10 @@ jobs:
                       ;;
               esac
           fi
+          
+          echo "KVERSION=$Kversion" >> $GITHUB_ENV
+          echo "查看内核名是否正确"
+          tail -n 3 ./common/scripts/setlocalversion
 
       - name: Build with retry
         uses: nick-fields/retry@v3
