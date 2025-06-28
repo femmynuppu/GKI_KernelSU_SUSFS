@@ -534,11 +534,10 @@ jobs:
             case "${{ inputs.kernel_version }}" in
                   "6.1")
                       echo "进入6.1 内核名称编辑"
-                      
+                      Android="-android14-11"
+                      Kversion="${Android}${{ inputs.version }}"
                       if [ ! -z ${{ inputs.version }} ]; then
                         echo "版本号不为空"
-                        Android="-android14-11"
-                        Kversion="${Android}${{ inputs.version }}"
                       else
                         Android="-android14-11-g"
                         Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
@@ -550,11 +549,10 @@ jobs:
                       ;;
                   "6.6")
                       echo "进入6.6 内核名称编辑"
-                      
+                      Android="-android15-8"
+                      Kversion="${Android}${{ inputs.version }}"
                       if [ ! -z ${{ inputs.version }} ]; then
                         echo "版本号不为空"
-                        Android="-android15-8"
-                        Kversion="${Android}${{ inputs.version }}"
                       else
                         Android="-android15-8-g"
                         Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
