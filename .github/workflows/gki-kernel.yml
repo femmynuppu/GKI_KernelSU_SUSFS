@@ -529,6 +529,28 @@ jobs:
             fi
           fi
 
+          if [ "${{ inputs.fast }}" == "true" ]; then
+            case "${{ inputs.kernel_version }}" in
+                  "6.1")
+                      Android="-android14-11-g"
+                      Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
+                      Kversion="${Android}${Random_hash}"
+                      sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion
+                      ;;
+                  "6.6")
+                      Android="-android15-8-g"
+                      Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
+                      Suffix="-ab$(shuf -i 13200000-13299999 -n 1)-4k"
+                      Kversion="${Android}${Random_hash}${Suffix}"
+                      sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion
+                      ;;
+                  *)
+                      echo "Error: Unsupported kernel_version: '${{ inputs.kernel_version }}'"
+                      exit 1
+                      ;;
+              esac
+          fi
+
       - name: Build with retry
         uses: nick-fields/retry@v3
         with:
@@ -562,7 +584,7 @@ jobs:
                       echo "Error: Unsupported kernel_version: '${{ inputs.kernel_version }}'"
                       exit 1
                       ;;
-                esac
+              esac
 
                 echo "Using Clang version: $CLANG_VERSION for Kernel version: ${{ inputs.kernel_version }}"
 
@@ -571,6 +593,7 @@ jobs:
                 export PATH="$GITHUB_WORKSPACE/$CONFIG/prebuilts/clang/host/linux-x86/$CLANG_VERSION/bin:$PATH"
                 export PATH="$GITHUB_WORKSPACE/$CONFIG/gcc/bin:$PATH"
                 export PATH="$GITHUB_WORKSPACE/$CONFIG/prebuilts/kernel-build-tools/linux-x86/bin:$PATH"
+                export PATH="/usr/lib/ccache:$PATH"
 
                 echo "--- Clang Version ---"
                 clang --version
@@ -582,6 +605,7 @@ jobs:
                   O=out
                   ARCH=arm64
                   LLVM=1
+                  CC="ccache clang"
                   CROSS_COMPILE=aarch64-linux-gnu-
               )
 
