@@ -534,7 +534,13 @@ jobs:
                   "6.1")
                       Android="-android14-11-g"
                       Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
-                      Kversion="${Android}${Random_hash}"
+                      Suffix="-ab$(shuf -i 13100000-13199999 -n 1)"
+                      Kversion="${Android}${Random_hash}${Suffix}"
+                      if [ ! -z ${{ inputs.version }} ]; then
+                        echo "版本号不为空"
+                        Android="-android14-11"
+                        Kversion="${Android}${{ inputs.version }}"
+                      fi
                       sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion
                       ;;
                   "6.6")
@@ -542,6 +548,11 @@ jobs:
                       Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
                       Suffix="-ab$(shuf -i 13200000-13299999 -n 1)-4k"
                       Kversion="${Android}${Random_hash}${Suffix}"
+                      if [ ! -z ${{ inputs.version }} ]; then
+                        echo "版本号不为空"
+                        Android="-android15-8"
+                        Kversion="${Android}${{ inputs.version }}"
+                      fi
                       sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion
                       ;;
                   *)
