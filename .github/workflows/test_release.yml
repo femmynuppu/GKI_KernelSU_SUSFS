@@ -166,6 +166,7 @@ jobs:
         -> BBR 支持
         ${{ inputs.use_kpm && '-> KPM 支持' || '' }}
         -> **LZ4KD&ONEPLUS_LZ4K**  ${{ inputs.use_zram && '支持' || '不支持' }}
+        -> lz4: v1.10.0
         
 
         模块: 

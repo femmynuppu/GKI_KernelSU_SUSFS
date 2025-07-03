@@ -165,7 +165,7 @@ jobs:
           # Sukisu的补丁仓库
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
           # next修复补丁
-          git clone https://github.com/zzh20188/GKI_KernelSU_SUSFS.git FIX_NEXT
+          git clone https://github.com/zzh20188/GKI_KernelSU_SUSFS.git zzh_patch
           
       - name: 设置 CONFIG 环境变量
         run: |
@@ -311,7 +311,7 @@ jobs:
               cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
               patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
               echo "应用临时修复补丁"
-              cp ../../FIX_NEXT/next-patch/* ./
+              cp ../../zzh_patch/next-patch/* ./
               patch -p1 --fuzz=3 --forward < apk_sign.patch
               patch -p1 --fuzz=3 --forward < core_hook.patch
               patch -p1 --fuzz=3 --forward < ksud.patch
@@ -364,6 +364,48 @@ jobs:
             echo "Applying hooks for SukiSU..."
             cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
             patch -p1 -F 3 < syscall_hooks.patch
+          fi
+      
+      - name: 升级LZ4至1.10.0
+        run: |
+
+          echo "更改为配置目录: $CONFIG..."
+          cd "$CONFIG/common"
+          echo 'lz升级'
+          # 删除lz4库旧有文件
+          files=(
+              "lib/lz4/lz4_compress.c"
+              "lib/lz4/lz4_decompress.c"
+              "lib/lz4/lz4defs.h"
+              "lib/lz4/lz4hc_compress.c"
+          )
+
+          for file in "${files[@]}"; do
+              if [ -e "$file" ]; then
+                  rm "$file"
+                  echo "$file 已删除"
+              else
+                  echo "$file 不存在"
+              fi
+          done
+
+          cp -r ../../zzh_patch/zram/lz4/* ./lib/lz4/
+          cp -r ../../zzh_patch/zram/include/linux/* ./include/linux/
+          cp -r ../../zzh_patch/zram/${{ inputs.kernel_version }}/lz4_1.10.0.patch ./
+
+          patch -p1 -F 3 --fuzz=5 < lz4_1.10.0.patch || true
+
+          # 检查文件是否存在
+          if [ -f "fs/f2fs/Makefile" ]; then
+              # 检查是否包含指定行
+              if ! grep -qF "f2fs-\$(CONFIG_F2FS_IOSTAT) += iostat.o" "fs/f2fs/Makefile"; then
+                  echo "f2fs-\$(CONFIG_F2FS_IOSTAT) += iostat.o" >> "fs/f2fs/Makefile"
+                  echo "已添加: f2fs-\$(CONFIG_F2FS_IOSTAT) += iostat.o"
+              else
+                  echo "文件已经包含: f2fs-\$(CONFIG_F2FS_IOSTAT) += iostat.o"
+              fi
+          else
+              echo "文件不存在: fs/f2fs/Makefile"
           fi
 
       - name: 复制源文件 & 应用LZ4KD & ZSTDN补丁
@@ -543,53 +585,54 @@ jobs:
             sed -i '$s|echo "\$res"|echo "${{ inputs.version }}"|' ./common/scripts/setlocalversion
             sed -i '/^CONFIG_LOCALVERSION=/ s/="\([^"]*\)"/="${{ inputs.version }}"/' ./common/arch/arm64/configs/gki_defconfig
           fi
-      - name: 配置内核名称(快速构建)
-        if: ${{ inputs.fast }}
-        run: |
-            echo "更改为配置目录: $CONFIG..."
-            cd "$CONFIG"
-            sed -i 's/-dirty//' ./common/scripts/setlocalversion
-            echo "启用快速编译：设置随机字符串或指定内容"
-            case "${{ inputs.kernel_version }}" in
-                  "6.1")
-                      echo "进入6.1 内核名称编辑"
-                      Android="-android14-11"
-                      Kversion="${Android}${{ inputs.version }}"
-                      if [ ! -z ${{ inputs.version }} ]; then
-                        echo "版本号不为空"
-                      else
-                        Android="-android14-11-g"
-                        Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
-                        Suffix="-ab$(shuf -i 13100000-13199999 -n 1)"
-                        Kversion="${Android}${Random_hash}"
-                      fi
-                      echo $Kversion
-                      sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion                  
-                      ;;
-                  "6.6")
-                      echo "进入6.6 内核名称编辑"
-                      Android="-android15-8"
-                      Kversion="${Android}${{ inputs.version }}"
-                      if [ ! -z ${{ inputs.version }} ]; then
-                        echo "版本号不为空"
-                      else
-                        Android="-android15-8-g"
-                        Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
-                        Suffix="-ab$(shuf -i 13200000-13299999 -n 1)-4k"
-                        Kversion="${Android}${Random_hash}-4k"
-                      fi
-                      echo $Kversion
-                      sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion
-                      ;;
-                  *)
-                      echo "Error: Unsupported kernel_version: '${{ inputs.kernel_version }}'"
-                      exit 1
-                      ;;
-              esac
+
+      # - name: 配置内核名称(快速构建)
+      #   if: ${{ inputs.fast }}
+      #   run: |
+      #       echo "更改为配置目录: $CONFIG..."
+      #       cd "$CONFIG"
+      #       sed -i 's/-dirty//' ./common/scripts/setlocalversion
+      #       echo "启用快速编译：设置随机字符串或指定内容"
+      #       case "${{ inputs.kernel_version }}" in
+      #             "6.1")
+      #                 echo "进入6.1 内核名称编辑"
+      #                 Android="-android14-11"
+      #                 Kversion="${Android}${{ inputs.version }}"
+      #                 if [ ! -z ${{ inputs.version }} ]; then
+      #                   echo "版本号不为空"
+      #                 else
+      #                   Android="-android14-11-g"
+      #                   Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
+      #                   Suffix="-ab$(shuf -i 13100000-13199999 -n 1)"
+      #                   Kversion="${Android}${Random_hash}"
+      #                 fi
+      #                 echo $Kversion
+      #                 sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion                  
+      #                 ;;
+      #             "6.6")
+      #                 echo "进入6.6 内核名称编辑"
+      #                 Android="-android15-8"
+      #                 Kversion="${Android}${{ inputs.version }}"
+      #                 if [ ! -z ${{ inputs.version }} ]; then
+      #                   echo "版本号不为空"
+      #                 else
+      #                   Android="-android15-8-g"
+      #                   Random_hash=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
+      #                   Suffix="-ab$(shuf -i 13200000-13299999 -n 1)-4k"
+      #                   Kversion="${Android}${Random_hash}-4k"
+      #                 fi
+      #                 echo $Kversion
+      #                 sed -i "\$s|echo \"\$res\"|echo \"$Kversion\"|" ./common/scripts/setlocalversion
+      #                 ;;
+      #             *)
+      #                 echo "Error: Unsupported kernel_version: '${{ inputs.kernel_version }}'"
+      #                 exit 1
+      #                 ;;
+      #         esac
             
-              echo "KVERSION=$Kversion" >> $GITHUB_ENV
-              echo "查看内核名是否正确"
-              tail -n 3 ./common/scripts/setlocalversion
+      #         echo "KVERSION=$Kversion" >> $GITHUB_ENV
+      #         echo "查看内核名是否正确"
+      #         tail -n 3 ./common/scripts/setlocalversion
 
       - name: Build with retry
         uses: nick-fields/retry@v3
