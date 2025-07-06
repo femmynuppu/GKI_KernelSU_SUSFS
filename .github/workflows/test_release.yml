@@ -5,6 +5,8 @@ permissions:
   actions: write   # Allows triggering actions
   
 on:
+  schedule:
+    - cron: '0 12 */2 * *'  # 每两天的 12:00 触发
   workflow_dispatch:
     inputs:
       make_release:
@@ -73,7 +75,7 @@ jobs:
       version: ${{ inputs.version }}
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
-      
+
   # build-kernel-a13-5-10:
   #   uses: ./.github/workflows/kernel-a13-5.10.yml
   #   secrets: inherit
