@@ -580,7 +580,20 @@ jobs:
             echo "版本号不为空"
             sed -i '$s|echo "\$res"|echo "${{ inputs.version }}"|' ./common/scripts/setlocalversion
             sed -i '/^CONFIG_LOCALVERSION=/ s/="\([^"]*\)"/="${{ inputs.version }}"/' ./common/arch/arm64/configs/gki_defconfig
+          elif [ ! -f "build/build.sh" ]; then
+            echo "版本号为空,如果使用bazel编译,且如果使用bazel则加上kmi"
+            cd ./common
+
+            # 6.1
+            kmi="-android14-11-g$(git rev-parse --verify HEAD | cut -c1-13)"
+            echo "KMI=$kmi"
+            sed -i "\$s|echo \"\$res\"|echo \"$kmi\"|" ./scripts/setlocalversion
+            # 6.6
+            kmi="-g$(git rev-parse --verify HEAD | cut -c1-13)-4k"
+            sed -i "/^CONFIG_LOCALVERSION=/ s/=\"[^\"]*\"/=\"${kmi}\"/" ./arch/arm64/configs/gki_defconfig
+            echo "KMI=$kmi"
           fi
+          
 
       # - name: 配置内核名称(快速构建)
       #   if: ${{ inputs.fast }}
@@ -626,6 +639,8 @@ jobs:
               LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh CC="/usr/bin/ccache clang" || exit 1
             elif [ "${{ inputs.fast }}" != "true" ]; then
               tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast --lto=thin //common:kernel_aarch64_dist || exit 1
+              echo "debug:输出内核版本号"
+              strings ./bazel-bin/common/kernel_aarch64/Image | grep 'Linux version'
             else
               # sed -i 's/-dirty//' ./common/scripts/setlocalversion
               case "${{ inputs.kernel_version }}" in
