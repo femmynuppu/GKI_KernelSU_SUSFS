@@ -356,10 +356,15 @@ jobs:
           echo "更改为配置目录: $CONFIG..."
           cd "$CONFIG/common"
 
-          # 无论任何变体KSU,均使用手动钩子1.4
-          echo "Applying hooks for ${{ inputs.kernelsu_variant }}..."
-          cp ../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch ./
-          patch -p1 -F 3 < scope_min_manual_hooks_v1.4.patch
+          if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
+            echo "Applying hooks for KernelSU-Next..."
+            cp ../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch ./
+            patch -p1 -F 3 < scope_min_manual_hooks_v1.4.patch
+          elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
+            echo "Applying hooks for SukiSU..."
+            cp ../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch ./
+            patch -p1 -F 3 < scope_min_manual_hooks_v1.4.patch
+          fi
       
       - name: 升级LZ4至1.10.0
         run: |
