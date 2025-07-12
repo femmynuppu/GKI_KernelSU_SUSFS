@@ -8,9 +8,10 @@
 > 
 > 最近更新：
 > 
-> 1. NEXT、官方原版、MKSU的susfs1.5.9 正常编译
-> 2. GKI内核默认算法LZ4——更新至v1.10.0
-> 3. 全KSU均使用手动钩子1.4 (https://github.com/backslashxx/KernelSU/issues/5)
+> 1. 修复next编译报错
+> 2. 优化获取KSU管理器功能（已稳定不报错），并额外获取最新sus模块
+> 3. Release 优化自动获取KSU版本和SUSFS版本，减少维护成本
+> 4. 挖坑，之后可能出一个一加仓库...
 
 ### Tips
 1. 关于安全补丁
