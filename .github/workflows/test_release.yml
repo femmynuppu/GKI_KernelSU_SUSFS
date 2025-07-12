@@ -387,7 +387,7 @@ jobs:
         run: |
             echo "Uploading KSU管理器"
             gh release upload ${{ env.NEW_TAG }} "./downloaded-artifacts/*Manager*/*"
-            gh release upload ${{ env.NEW_TAG }} "./downloaded-artifacts/susfs-*"
+            gh release upload ${{ env.NEW_TAG }} "./downloaded-artifacts/susfs-*.zip"
 
       - name: 动态上传发布资产
         run: |
