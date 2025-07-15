@@ -34,7 +34,6 @@ jobs:
 
     steps:
       - name: 🧐 Debug Workflow Caller Context
-        if: always()
         run: |
           echo "==================== DEBUG CONTEXT ===================="
           echo " "
@@ -56,10 +55,7 @@ jobs:
           echo "  - Ref Type:          ${{ github.ref_type }}"
           echo " "
           echo "======================================================="
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-
+          
       - name: 安装依赖
         run: sudo apt update && sudo apt upgrade -y && sudo apt install -y git curl jq
 
@@ -195,12 +191,12 @@ jobs:
           echo "正在检查调用者: ${{ github.caller_workflow }}"
 
           # 由用户调用或是由作者上传到release?
-          if [[ "${{ github.caller_workflow }}" == *"/test_release.yml@"* ]]; then
 
-            echo "✅ 检测到由 test_release.yml 调用，不执行解压..."
+          if [ "${{ github.workflow }}" == "测试发布" ]; then
+            echo "这是测试发布工作流"
             mkdir -p susfs-module && mv $NAME susfs-module
           else
-            echo "✅ 检测到由 其他 workflow 调用，执行解压..."
+            echo "这是其他工作流"
             mkdir -p susfs-module && unzip *.zip -d susfs-module
           fi
 
