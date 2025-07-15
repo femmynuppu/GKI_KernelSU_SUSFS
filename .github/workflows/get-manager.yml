@@ -166,7 +166,6 @@ jobs:
       - name: 添加 SUSFS 模块
         id: add_SUSFS
         continue-on-error: true
-        if: github.event_name == 'workflow_call'
         run: |
           BUILD_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           "https://api.github.com/repos/sidex15/susfs4ksu-module/actions/workflows/build.yml/runs?status=success" |
