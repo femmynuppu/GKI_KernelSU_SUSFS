@@ -162,8 +162,8 @@ jobs:
         -> SUSFS ඞ ${{ needs.get_manager.outputs.susVer }}
         -> 最小作用域手动挂钩 v1.4
         ${{ inputs.kernelsu_variant != 'Official' && '-> Magic Mount 支持' || '-> OVERLAYFS 支持' }}
-        -> 简单隐藏 LineageOS 检测
-        -> 徒劳隐藏 jit-zygote-cache 检测
+        -> LineageOS 检测对抗
+        -> jit-zygote-cache 检测对抗
         -> Wireguard 支持
         -> BBR 支持
         ${{ inputs.use_kpm && '-> KPM 支持' || '' }}
@@ -387,7 +387,7 @@ jobs:
         run: |
             echo "Uploading KSU管理器"
             gh release upload ${{ env.NEW_TAG }} "./downloaded-artifacts/*Manager*/*"
-            gh release upload ${{ env.NEW_TAG }} "./downloaded-artifacts/susfs-*.zip"
+            gh release upload ${{ env.NEW_TAG }} "./downloaded-artifacts/susfs-*/*"
 
       - name: 动态上传发布资产
         run: |
