@@ -11,6 +11,9 @@
 > 1. 如果KSU-NEXT显示未安装，请下载[KSU_Next_v1.0.9_12797](https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v1.0.9/KernelSU_Next_v1.0.9_12797-release.apk)这个版本的管理器安装包！
 > 2. 新增内核构建时间设置，详情可以下滑找到
 
+### 反馈
+> https://wj.qq.com/s2/23228305/f16f/
+
 ### Tips
 1. 关于安全补丁
     - 手机设置里的安全补丁时间与GKI内核的安全补丁时间**无关**，请无视它
