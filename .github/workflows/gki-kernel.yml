@@ -347,15 +347,14 @@ jobs:
           fi
 
           cd ../common
+          patch -p1 --fuzz=3 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+
           FORMATTED_BRANCH="${{ inputs.android_version }}-${{ inputs.kernel_version }}"
           if grep -q deprecated <<< "$REMOTE_BRANCH" && \
              { [ "$FORMATTED_BRANCH" == "android12-5.10" ] && \
                [ ${{ inputs.sub_level }} -lt 136 ]; }; then
-            patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
             cp ../../zzh_patch/5.10-patch/fdinfo.c.patch ./
             patch -p1 < fdinfo.c.patch
-          else
-            patch -p1 --fuzz=3 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
           fi
   
       - name: 应用新的HOOKS补丁
