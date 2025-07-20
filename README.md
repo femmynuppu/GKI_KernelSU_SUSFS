@@ -9,6 +9,7 @@
 > 最近更新：
 > 
 > 1. 如果KSU-NEXT显示未安装，请下载[KSU_Next_v1.0.9_12797](https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v1.0.9/KernelSU_Next_v1.0.9_12797-release.apk)这个版本的管理器安装包！
+> 2. 新增内核构建时间设置，详情可以下滑找到
 
 ### Tips
 1. 关于安全补丁
@@ -53,6 +54,13 @@
 
 ![release](./assets/release.png)
 #### 由于SUKISU内置SUSFS功能未完善完美，仍建议使用SUS模块！
+
+### 内核构建时间
+在构建内核时，可以指定内核的构建时间。在Action的输入框中输入指定格式的字符即可。
+如：**Thu Jul 17 14:26:50 UTC 2025**
+> 这个时间表示的是2025年7月17日的14:26:50（协调世界时间，UTC）。
+当你没有输入指定时间，则为构建内核时的时间
+
 
 ### 紧急救援指南
 
@@ -102,7 +110,6 @@ $ fastboot flash boot <boot.img文件全称>
 > **3. 编译优化建议**  
 > 修改 [配置文件](.github/workflows/kernel-a12-5.10.yml)（如kernel-a12-5.10.yml）：
 > - ▶️ 删除/注释不需要的GKI版本配置（**加速编译**）
-> - 📅 内核构建时间，参照[gki-kernel.yml](.github/workflows/gki-kernel.yml) 文件 **`第552行左右的注释`** 进行修改
 
 ### 更多内容
 可以提及您的意见...我会尝试！

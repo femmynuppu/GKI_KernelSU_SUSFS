@@ -30,6 +30,10 @@ on:
         description: '自定义版本名(如5.15.167后面的字符/留空则使用默认版本号)'
         required: false
         type: string
+      build_time:
+        description: '设置内核构建时间(格式见仓库说明)'
+        required: false
+        type: string
       use_zram:
         description: '是否开启增加更多ZRAM算法?'
         required: true
@@ -50,6 +54,7 @@ on:
         required: false
         type: boolean
         default: false
+
 jobs:
 
   build-kernel-a13-5-15:
@@ -63,6 +68,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
       onlyAk3: ${{ inputs.onlyAk3 }}
+      build_time: ${{ inputs.build_time }}
   get-ksu-manager:
     if: ${{ inputs.get_manager }}
     uses: ./.github/workflows/get-manager.yml
