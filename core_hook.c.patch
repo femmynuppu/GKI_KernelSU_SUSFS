@@ -1,8 +1,8 @@
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 7baebd75..5d7a0b89 100644
+index 0f33a2dd..2471c7bb 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
-@@ -1106,18 +1106,23 @@ out_ksu_try_umount:
+@@ -1164,17 +1164,23 @@ out_ksu_try_umount:
  		current->pid);
  #endif
  
@@ -28,9 +28,8 @@ index 7baebd75..5d7a0b89 100644
  
  	// try umount ksu temp path
 -	try_umount("/debug_ramdisk", false, MNT_DETACH);
--
 +	ksu_try_umount("/debug_ramdisk", false, MNT_DETACH);
 +#endif
+ 
  	return 0;
  }
- 

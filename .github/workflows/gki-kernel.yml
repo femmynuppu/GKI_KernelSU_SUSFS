@@ -303,9 +303,12 @@ jobs:
             patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
             # 当KSU为标准版,无须额外补丁
             if [ "$BRANCH" != "-" ]; then
-              curl -LSs https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/dev/core_hook.c.patch -o core_hook.c.patch
+              cp ../../zzh_patch/core_hook.c.patch ./
+              cp ../../zzh_patch/rules.c.patch ./
               patch -p1 --fuzz=3 < core_hook.c.patch
+              patch -p1 --fuzz=3 < rules.c.patch
             fi
+
           elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             # 临时恢复KSU-NEXT的dev编译
             echo "Applying SUSFS patches for KernelSU-Next..."
@@ -332,10 +335,11 @@ jobs:
             patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
             # 当KSU为标准版,无须额外补丁
             if [ "$BRANCH" != "-" ]; then
-              curl -LSs https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/dev/core_hook.c.patch -o core_hook.c.patch
+              cp ../../zzh_patch/core_hook.c.patch ./
+              cp ../../zzh_patch/rules.c.patch ./
               patch -p1 --fuzz=3 < core_hook.c.patch
+              patch -p1 --fuzz=3 < rules.c.patch
             fi
-            
 
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying SUSFS patches for SukiSU..."
