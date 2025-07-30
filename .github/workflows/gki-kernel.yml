@@ -137,6 +137,11 @@ jobs:
           echo "MKBOOTIMG=$GITHUB_WORKSPACE/mkbootimg/mkbootimg.py" >> $GITHUB_ENV
           echo "UNPACK_BOOTIMG=$GITHUB_WORKSPACE/mkbootimg/unpack_bootimg.py" >> $GITHUB_ENV
 
+      - name: 配置 Git
+        run: |
+          git config --global user.name "zzh20188"
+          git config --global user.email "BuildGkiKernel@gmail.com"
+      
       - name: 密钥设置——已经过mkppk修改
         env:
           BOOT_SIGN_KEY: ${{ secrets.BOOT_SIGN_KEY }}
@@ -331,19 +336,20 @@ jobs:
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "Applying SUSFS patches for MKSU..."
             cd ./KernelSU
+            # 回退 devpts hooks 提交
+            git revert --no-edit 99b82405e8473b715e8edb92e2226dc3c376bde4
+
             cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
             patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
-            # 当KSU为标准版,无须额外补丁
-            if [ "$BRANCH" != "-" ]; then
-              cp ../../zzh_patch/core_hook.c.patch ./
-              cp ../../zzh_patch/rules.c.patch ./
-              patch -p1 --fuzz=3 < core_hook.c.patch
-              patch -p1 --fuzz=3 < rules.c.patch
-            fi
+
+            cp ../../zzh_patch/core_hook.c.patch ./
+            cp ../../zzh_patch/rules.c.patch ./
+            patch -p1 --fuzz=3 < core_hook.c.patch
+            patch -p1 --fuzz=3 < rules.c.patch
 
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying SUSFS patches for SukiSU..."
-             cd ./KernelSU
+            cd ./KernelSU
             echo "Applying SukiSU specific SUSFS patch..."
           else
             echo "Invalid KernelSU variant selected!"
@@ -535,8 +541,6 @@ jobs:
             echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig
-          elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
-            echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
           fi
           
           # Add additional tmpfs config setting
