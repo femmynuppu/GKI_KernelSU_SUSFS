@@ -305,14 +305,9 @@ jobs:
             echo "Applying SUSFS patches for Official KernelSU..."
             cd ./KernelSU
             cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./ 
-            patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
-            # 当KSU为标准版,无须额外补丁
-            if [ "$BRANCH" != "-" ]; then
-              cp ../../zzh_patch/core_hook.c.patch ./
-              cp ../../zzh_patch/rules.c.patch ./
-              patch -p1 --fuzz=3 < core_hook.c.patch
-              patch -p1 --fuzz=3 < rules.c.patch
-            fi
+            patch -p1 --forward < 10_enable_susfs_for_ksu.patch || true
+            cp ../../zzh_patch/mksu_ksud.patch ./
+            patch -p1 --fuzz=3 < mksu_ksud.patch
 
           elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             # 临时恢复KSU-NEXT的dev编译
@@ -326,9 +321,9 @@ jobs:
               cp ../../zzh_patch/next-patch/* ./
               patch -p1 --fuzz=3 --forward < apk_sign.patch
               patch -p1 --fuzz=3 --forward < core_hook.patch
-              patch -p1 --fuzz=3 --forward < ksud.patch
-              patch -p1 --fuzz=3 --forward < selinux.patch
-              patch -p1 --fuzz=3 --forward < rules.c.patch
+              # patch -p1 --fuzz=3 --forward < ksud.patch
+              # patch -p1 --fuzz=3 --forward < selinux.patch
+              # patch -p1 --fuzz=3 --forward < rules.c.patch
               patch -p1 --fuzz=3 --forward < sucompat.c.patch
               patch -p1 --fuzz=3 --forward < kernel_compat.c.patch
             fi
@@ -336,16 +331,15 @@ jobs:
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "Applying SUSFS patches for MKSU..."
             cd ./KernelSU
-            # 回退 devpts hooks 提交
-            git revert --no-edit 99b82405e8473b715e8edb92e2226dc3c376bde4
 
             cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
-            patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
+            patch -p1 --forward < 10_enable_susfs_for_ksu.patch || true
 
-            cp ../../zzh_patch/core_hook.c.patch ./
-            cp ../../zzh_patch/rules.c.patch ./
-            patch -p1 --fuzz=3 < core_hook.c.patch
-            patch -p1 --fuzz=3 < rules.c.patch
+            echo "Applying MKSU specific patches..."
+            cp ../../zzh_patch/mksu_core_hook.c.patch ./
+            cp ../../zzh_patch/mksu_ksud.patch ./
+            patch -p1 --fuzz=3 < mksu_core_hook.c.patch
+            patch -p1 --fuzz=3 < mksu_ksud.patch
 
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying SUSFS patches for SukiSU..."
@@ -378,6 +372,10 @@ jobs:
             patch -p1 -F 3 < scope_min_manual_hooks_v1.4.patch
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "Applying hooks for SukiSU..."
+            cp ../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch ./
+            patch -p1 -F 3 < scope_min_manual_hooks_v1.4.patch
+          elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ] || [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
+            echo "Applying hooks for MKSU..."
             cp ../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch ./
             patch -p1 -F 3 < scope_min_manual_hooks_v1.4.patch
           fi
@@ -541,6 +539,16 @@ jobs:
             echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig
+          elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ] || [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
+            echo "CONFIG_KSU_SUSFS_SUS_SU=n" >>./common/arch/arm64/configs/gki_defconfig
+            # 检查 CONFIG_KPROBES=y 是否存在
+            if grep -q '^CONFIG_KPROBES=y' ./common/arch/arm64/configs/gki_defconfig; then
+                echo "找到 CONFIG_KPROBES=y，正在替换为 CONFIG_KPROBES=n"
+                sed -i 's/^CONFIG_KPROBES=y/CONFIG_KPROBES=n/' ./common/arch/arm64/configs/gki_defconfig
+            else
+                echo "未找到 CONFIG_KPROBES=y，直接添加 CONFIG_KPROBES=n"
+                echo "CONFIG_KPROBES=n" >> ./common/arch/arm64/configs/gki_defconfig
+            fi
           fi
           
           # Add SUSFS configuration settings
@@ -726,7 +734,7 @@ jobs:
               cp ./out/arch/arm64/boot/Image* ../bazel-bin/common/kernel_aarch64/
             fi
             
-      - name: 修补 Image 文件 安卓12和安卓13(仅限sukisu)
+      - name: 修补 Image 文件(仅限sukisu)
         if: ${{ inputs.use_kpm && inputs.kernelsu_variant == 'SukiSU' && (inputs.android_version == 'android12' || inputs.android_version == 'android13') }}
         run: |
           if [ "${{ inputs.kernel_version }}" != "6.6" ]; then
@@ -743,7 +751,7 @@ jobs:
       - name: 修补 Image 文件 安卓14和安卓15(仅限sukisu)
         if: ${{ inputs.use_kpm && inputs.kernelsu_variant == 'SukiSU' && (inputs.android_version == 'android14' || inputs.android_version == 'android15') }}
         run: |
-          if [ "${{ inputs.kernel_version }}" != "6.6" ]; then
+
             echo "Patching Image file..."
             cd "$CONFIG/bazel-bin/common/kernel_aarch64/"
             curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU_patch/refs/heads/main/kpm/patch_linux" -o patch
@@ -752,7 +760,6 @@ jobs:
             rm -rf Image
             mv oImage Image
             cd ../../..
-          fi
 
       - name: 创建Bootimgs文件夹并复制镜像
         if: ${{ inputs.android_version == 'android12' || inputs.android_version == 'android13' }}
