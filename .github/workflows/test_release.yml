@@ -160,7 +160,7 @@ jobs:
         功能:
         -> ${{ inputs.kernelsu_variant == 'Next' && 'KernelSU-' || '' }}${{ inputs.kernelsu_variant }}${{ inputs.kernelsu_variant == 'Official' && '原版' || '' }}${{ inputs.kernelsu_branch == 'Dev(开发)' && format('({0})', needs.get_manager.outputs.ksuVer) || '稳定版' }}
         -> SUSFS ඞ ${{ needs.get_manager.outputs.susVer }}
-        -> VFS Hooks v1.4
+        -> ${{ (inputs.kernelsu_variant == 'Official' || inputs.kernelsu_variant == 'MKSU') && 'Kprobes Hook + SUSFS_SUS_SU' || 'VFS Hooks v1.4' }}
         ${{ inputs.kernelsu_variant != 'Official' && '-> Magic Mount 支持' || '-> OVERLAYFS 支持' }}
         -> LineageOS 检测对抗
         -> jit-zygote-cache 检测对抗
@@ -210,8 +210,8 @@ jobs:
             REPO_URL2="5ec1cff/KernelSU"
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "This is the SukiSU variant"
-            REPO_URL="https://github.com/ShirkNeko/KernelSU.git"
-            REPO_URL2="ShirkNeko/KernelSU"
+            REPO_URL="https://github.com/SukiSU-Ultra/SukiSU-Ultra.git"
+            REPO_URL2="SukiSU-Ultra/SukiSU-Ultra"
           else
             echo "Unknown variant"
           fi
