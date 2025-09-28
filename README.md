@@ -13,7 +13,8 @@
 ### 无限重启？
 1. 一加：colorOS15魔改过f2fs，已经不兼容GKI的f2fs，除非进入rec清除Data重启
 2. 小米：一些机型因为启动引导因avb验证导致无法启动分区，如红米k50，需要关闭avb验证（https://magiskcn.com/disable-avb）
-3. 其他：其他手机也可能因为相似的兼容问题，如果有可以补充。。。
+3. zram:一些机型或系统使用了带zram补丁的内核也可能，遇到该情况可以刷[Release](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases)中不带zram的内核，或者在编译选项中不勾选[增加更多ZRAM算法]以编译无zram的内核
+4. 其他：其他手机也可能因为相似的兼容问题，如果有可以补充。。。
 
 ### Tips
 1. 关于安全补丁

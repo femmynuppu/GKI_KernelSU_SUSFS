@@ -165,8 +165,8 @@ jobs:
         -> LineageOS 检测对抗
         -> jit-zygote-cache 检测对抗
         ${{ inputs.use_kpm && '-> KPM 支持' || '' }}
-        -> **LZ4KD&ONEPLUS_LZ4K**  ${{ inputs.use_zram && '支持' || '不支持' }}
-        -> lz4: v1.10.0
+        -> **LZ4KD&ONEPLUS_LZ4K**  ${{ inputs.use_zram && '开启' || '未开启' }}
+        -> lz4: v1.10.0 ${{ inputs.use_zram && '开启' || '未开启' }}
         
         模块: 
         -> https://github.com/sidex15/ksu_module_susfs
@@ -300,7 +300,7 @@ jobs:
             echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
             echo "$RELEASE_NOTES" >> $GITHUB_ENV
             echo "SukiSU 管理器:" >> $GITHUB_ENV
-            echo "-> https://github.com/ShirkNeko/SukiSU-Ultra" >> $GITHUB_ENV
+            echo "-> https://github.com/SukiSU-Ultra/SukiSU-Ultra" >> $GITHUB_ENV
             echo "EOF" >> $GITHUB_ENV
           else
             echo "Unknown variant"
