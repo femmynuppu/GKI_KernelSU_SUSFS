@@ -162,8 +162,6 @@ jobs:
         -> SUSFS ඞ ${{ needs.get_manager.outputs.susVer }}
         -> ${{ (inputs.kernelsu_variant == 'Official' || inputs.kernelsu_variant == 'MKSU') && 'Kprobes Hook + SUSFS_SUS_SU' || 'VFS Hooks v1.4' }}
         ${{ inputs.kernelsu_variant != 'Official' && '-> Magic Mount 支持' || '-> OVERLAYFS 支持' }}
-        -> LineageOS 检测对抗
-        -> jit-zygote-cache 检测对抗
         ${{ inputs.use_kpm && '-> KPM 支持' || '' }}
         -> **LZ4KD&ONEPLUS_LZ4K**  ${{ inputs.use_zram && '开启' || '未开启' }}
         -> lz4: v1.10.0 ${{ inputs.use_zram && '开启' || '未开启' }}

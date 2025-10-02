@@ -1,13 +1,25 @@
 diff --git a/fs/devpts/inode.c b/fs/devpts/inode.c
-index f1394c691..d3c791f1e 100644
+index 099ab024d..1bf39c22b 100644
 --- a/fs/devpts/inode.c
 +++ b/fs/devpts/inode.c
-@@ -612,16 +612,6 @@ extern int ksu_handle_devpts(struct inode*);
+@@ -599,11 +599,6 @@ struct dentry *devpts_pty_new(struct pts_fs_info *fsi, int index, void *priv)
+ 	return dentry;
+ }
+ 
+-#if defined(CONFIG_KSU_SUSFS_SUS_SU)
+-extern bool ksu_devpts_hook;
+-extern int ksu_handle_devpts(struct inode*);
+-#endif
+-
+ /**
+  * devpts_get_priv -- get private data for a slave
+  * @pts_inode: inode of the slave
+@@ -612,16 +607,6 @@ extern int ksu_handle_devpts(struct inode*);
   */
  void *devpts_get_priv(struct dentry *dentry)
  {
 -#ifdef CONFIG_KSU_SUSFS_SUS_SU
--	if (likely(susfs_is_current_proc_su_not_allowed())) {
+-	if (likely(susfs_is_current_proc_umounted())) {
 -		goto orig_flow;
 -	}
 -	if (likely(ksu_devpts_hook)) {

@@ -26,7 +26,7 @@ on:
           - Stable(标准)
           - Dev(开发)
           - Other(其他/指定)
-        default: Dev(开发)
+        default: Stable(标准)
       # kernelsu_branch_other:
       #   description: "如果选择了 “其他”，请指定您的自定义分支"
       #   required: false
