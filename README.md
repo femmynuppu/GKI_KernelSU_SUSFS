@@ -1,20 +1,26 @@
 ### 这是一个自动构建GKI内核的仓库
 
-> 非GKI可以尝试[SukiSU云盘](https://alist.shirkneko.top)的资源，不支持一加ColorOS14、15
+> 不支持一加ColorOS14、15，刷入后可能需要清除数据开机
 >
 > 第一次使用务必**详细阅读**以下内容，不要因为懒惰而占用他人时间！
 >
-> 因SUKISU和NEXT已不在维护旧版本susfs的分支，编译时你无论选择Dev或Stable，都是一样的结果；
->且mksu也无标准/开发版本概念，无论选择哪个都一样，但（KSU的稳定版是最新TAG，也就是[v1.0.5](https://github.com/tiann/KernelSU/tree/v1.0.5)，4月22日发布的那个）
+> SUKISU，编译时你无论选择Dev或Stable，是不一样的结果，追求稳定选择Stable；
+> KSU的稳定版是最新TAG，也就是[v1.0.5](https://github.com/tiann/KernelSU/tree/v1.0.5)，4月22日发布的那个）
 > 
 > 最近更新：
-> 1. 全部 KSU 恢复更新，SUSFS 1.5.10，ksu和mksu切换为kprobe钩子正常使用
+> 1. SUSFS 1.5.11适配（GKI6.1）
+
 
 ### 无限重启？
 1. 一加：colorOS15魔改过f2fs，已经不兼容GKI的f2fs，除非进入rec清除Data重启
 2. 小米：一些机型因为启动引导因avb验证导致无法启动分区，如红米k50，需要关闭avb验证（https://magiskcn.com/disable-avb）
 3. zram:一些机型或系统使用了带zram补丁的内核也可能，遇到该情况可以刷[Release](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases)中不带zram的内核，或者在编译选项中不勾选[增加更多ZRAM算法]以编译无zram的内核
 4. 其他：其他手机也可能因为相似的兼容问题，如果有可以补充。。。
+
+### BUG反馈？
+该仓库仅提供GKI内核编译流程，也就是把KSU变体驱动合并内核二进制。关系为：对应KSU仓库或SUSFS更新了代码，该仓库编译包含最新KSU的内核，用户刷入编译成品使用。
+如果恰巧在KSU最新提交中出现了某一BUG，而你刷入了包含这段代码的内核，你应该向制造问题代码的地方反馈或者耐心等待下一版本是否修复。
+**而不是说本仓库更新了有BUG的内核，请快解决**
 
 ### Tips
 1. 关于安全补丁
