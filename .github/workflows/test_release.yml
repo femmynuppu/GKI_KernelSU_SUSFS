@@ -45,6 +45,11 @@ on:
         required: true
         type: boolean
         default: true
+      use_bbg:
+        description: '是否开启BBG防格机补丁?'
+        required: true
+        type: boolean
+        default: true
       use_kpm:
         description: '是否开启KPM功能?'
         required: true
@@ -73,6 +78,7 @@ jobs:
       version: ${{ inputs.version }}
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
+      use_bbg: ${{ inputs.use_bbg }}
 
   # build-kernel-a13-5-10:
   #   uses: ./.github/workflows/kernel-a13-5.10.yml
@@ -97,6 +103,7 @@ jobs:
       version: ${{ inputs.version }}
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
+      use_bbg: ${{ inputs.use_bbg }}
 
   # build-kernel-a14-5-15:
   #   uses: ./.github/workflows/kernel-a14-5.15.yml
@@ -121,6 +128,7 @@ jobs:
       version: ${{ inputs.version }}
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
+      use_bbg: ${{ inputs.use_bbg }}
 
   build-kernel-a15-6-6:
     uses: ./.github/workflows/kernel-a15-6.6.yml
@@ -133,6 +141,7 @@ jobs:
       version: ${{ inputs.version }}
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
+      use_bbg: ${{ inputs.use_bbg }}
 
   trigger-release:
     runs-on: ubuntu-latest
@@ -162,6 +171,7 @@ jobs:
         -> SUSFS ඞ ${{ needs.get_manager.outputs.susVer }}
         -> ${{ (inputs.kernelsu_variant == 'Official' || inputs.kernelsu_variant == 'MKSU') && 'Kprobes Hook + SUSFS_SUS_SU' || 'VFS Hooks v1.4' }}
         ${{ inputs.kernelsu_variant != 'Official' && '-> Magic Mount 支持' || '-> OVERLAYFS 支持' }}
+        -> 防格机模块 ${{ inputs.use_bbg && '支持' || '' }}
         ${{ inputs.use_kpm && '-> KPM 支持' || '' }}
         -> **LZ4KD&ONEPLUS_LZ4K**  ${{ inputs.use_zram && '开启' || '未开启' }}
         -> lz4: v1.10.0 ${{ inputs.use_zram && '开启' || '未开启' }}

@@ -27,18 +27,18 @@ on:
         required: true
         type: boolean
         default: true
+      use_bbg:
+        description: '是否开启BBG防格机补丁?'
+        required: true
+        type: boolean
+        default: true
       use_kpm:
         description: '是否开启KPM功能?'
-        required: false
+        required: true
         type: boolean
-        default: false
-      fast:
-        description: '编译加速(实验性):平均加快7分钟'
-        required: false
-        type: boolean
-        default: false
+        default: true
       supp_op:
-        description: '是否开启一加8E处理器机型支持?(非该机型无须勾)'
+        description: '是否开启一加8E处理器机型支持?'
         required: false
         type: boolean
         default: false
@@ -51,7 +51,6 @@ on:
         description: '设置内核构建时间(格式见仓库说明)'
         required: false
         type: string
-
 
 jobs:
   build-kernel-a15-6-6-kernelsu-susfs:
@@ -93,8 +92,8 @@ jobs:
       kernelsu_branch: ${{ inputs.kernelsu_branch || 'Dev' }}
       version: ${{ inputs.version || '' }}
       use_zram: ${{ inputs.use_zram }}
+      use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
-      supp_op: ${{ inputs.supp_op }}
-      fast: ${{ inputs.fast }}
+      supp_op: ${{ inputs.supp_op || false }}
       onlyAk3: ${{ inputs.onlyAk3 || false }}
       build_time: ${{ inputs.build_time || '' }}

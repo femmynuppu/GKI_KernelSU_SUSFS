@@ -9,6 +9,7 @@
 > 
 > 最近更新：
 > 1. SUSFS 1.5.11适配（GKI6.1）
+> 2. 防格机模块支持 https://github.com/vc-teahouse/Baseband-guard //可在Action勾选
 
 
 ### 无限重启？
