@@ -531,12 +531,12 @@ jobs:
           curl -sSL https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh -o setup.sh
           bash setup.sh || true
           echo 'CONFIG_BBG=y' >> arch/arm64/configs/gki_defconfig
-          sed -i 's/bpf/&,baseband_guard/g' security/Kconfig
-          # if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
-          #   echo 'CONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"' >> arch/arm64/configs/gki_defconfig
-          # else
-          #   echo 'CONFIG_LSM="landlock,lockdown,yama,loadpin,safesetid,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"' >> arch/arm64/configs/gki_defconfig
-          # fi
+          # sed -i 's/bpf/&,baseband_guard/g' security/Kconfig
+          if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+            echo 'CONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"' >> arch/arm64/configs/gki_defconfig
+          else
+            echo 'CONFIG_LSM="landlock,lockdown,yama,loadpin,safesetid,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"' >> arch/arm64/configs/gki_defconfig
+          fi
       
       - name: 添加SUSFS配置设置
         run: |
