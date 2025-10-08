@@ -522,17 +522,13 @@ jobs:
             echo "CONFIG_CRYPTO_LZ4K_OPLUS=y" >> "$CONFIG_FILE"
           fi
       
-      - name: Baseband-guard 补丁
-        if: ${{ inputs.use_bbg }}
+      - name: Add BBG
         run: |
-          echo "更改为配置目录: $CONFIG..."
-          cd "$CONFIG/common"
-          echo "执行LSM"
-          curl -sSL https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh -o setup.sh
-          bash setup.sh || true
-          echo 'CONFIG_BBG=y' >> arch/arm64/configs/gki_defconfig
-          # sed -i 's/bpf/&,baseband_guard/g' security/Kconfig
-          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/landlock/landlock,baseband_guard/ } }' security/Kconfig
+          cd "$CONFIG"
+          echo "Adding BBG..."
+          wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
+          echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
+          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/landlock/landlock,baseband_guard/ } }' common/security/Kconfig
       
       - name: 添加SUSFS配置设置
         run: |
