@@ -534,6 +534,8 @@ jobs:
           # sed -i 's/bpf/&,baseband_guard/g' security/Kconfig
           if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
             echo 'CONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"' >> arch/arm64/configs/gki_defconfig
+          elif [ "${{ inputs.kernel_version }}" = "5.15" ] || [ "${{ inputs.kernel_version }}" = "6.1" ]; then
+            echo 'CONFIG_LSM="landlock,lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"' >> arch/arm64/configs/gki_defconfig
           else
             echo 'CONFIG_LSM="landlock,lockdown,yama,loadpin,safesetid,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"' >> arch/arm64/configs/gki_defconfig
           fi
