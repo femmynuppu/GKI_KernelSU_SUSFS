@@ -532,13 +532,7 @@ jobs:
           bash setup.sh || true
           echo 'CONFIG_BBG=y' >> arch/arm64/configs/gki_defconfig
           # sed -i 's/bpf/&,baseband_guard/g' security/Kconfig
-          if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
-            echo 'CONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"' >> arch/arm64/configs/gki_defconfig
-          elif [ "${{ inputs.kernel_version }}" = "5.15" ] || [ "${{ inputs.kernel_version }}" = "6.1" ]; then
-            echo 'CONFIG_LSM="landlock,lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"' >> arch/arm64/configs/gki_defconfig
-          else
-            echo 'CONFIG_LSM="landlock,lockdown,yama,loadpin,safesetid,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"' >> arch/arm64/configs/gki_defconfig
-          fi
+          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/landlock/landlock,baseband_guard/ } }' security/Kconfig
       
       - name: 添加SUSFS配置设置
         run: |
