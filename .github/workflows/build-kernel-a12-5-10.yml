@@ -45,7 +45,7 @@ on:
         type: boolean
         default: true
       use_bbg:
-        description: '是否开启BBG防格机补丁?'
+        description: '是否开启BBG防格机补丁?（报错请关闭）'
         required: true
         type: boolean
         default: true
