@@ -10,6 +10,8 @@
 > 最近更新：
 > 1. SUSFS 1.5.11适配（GKI6.1）
 > 2. 防格机模块支持 https://github.com/vc-teahouse/Baseband-guard //可在Action勾选
+> 3. 修复BBG更新引起的报错，回退到报错前的版本
+
 
 
 ### 无限重启？
