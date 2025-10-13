@@ -171,7 +171,7 @@ jobs:
         -> SUSFS ඞ ${{ needs.get_manager.outputs.susVer }}
         -> ${{ (inputs.kernelsu_variant == 'Official' || inputs.kernelsu_variant == 'MKSU') && 'Kprobes Hook + SUSFS_SUS_SU' || 'VFS Hooks v1.4' }}
         ${{ inputs.kernelsu_variant != 'Official' && '-> Magic Mount 支持' || '-> OVERLAYFS 支持' }}
-        -> 防格机模块 ${{ inputs.use_bbg && '支持' || '不支持' }}
+        -> BBG安全补丁 ${{ inputs.use_bbg && '支持' || '不支持' }}
         ${{ inputs.use_kpm && '-> KPM 支持' || '' }}
         -> **LZ4KD&ONEPLUS_LZ4K**  ${{ inputs.use_zram && '开启' || '未开启' }}
         -> lz4: v1.10.0 ${{ inputs.use_zram && '开启' || '未开启' }}
