@@ -1,5 +1,5 @@
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index fa643e36..521c5552 100644
+index 2fb210b6..e0144a18 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -50,11 +50,92 @@
@@ -96,7 +96,7 @@ index fa643e36..521c5552 100644
  extern void ksu_sucompat_init();
  extern void ksu_sucompat_exit();
  
-@@ -1076,12 +1157,121 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -904,12 +985,121 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  

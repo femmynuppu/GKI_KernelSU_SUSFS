@@ -1,19 +1,18 @@
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index 9245e299..91600d2c 100644
+index 9245e299..420e6fcf 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
-@@ -14,6 +14,10 @@
+@@ -13,6 +13,9 @@
+ #else
  #include <linux/sched.h>
  #endif
- 
 +#ifdef CONFIG_KSU_SUSFS_SUS_SU
 +#include <linux/susfs_def.h>
 +#endif
-+
+ 
  #include "objsec.h"
  #include "allowlist.h"
- #include "arch.h"
-@@ -43,37 +47,37 @@ static inline void __user *userspace_stack_buffer(const void *d, size_t len)
+@@ -43,37 +46,37 @@ static inline void __user *userspace_stack_buffer(const void *d, size_t len)
  	return copy_to_user(p, d, len) ? NULL : p;
  }
  
@@ -59,7 +58,7 @@ index 9245e299..91600d2c 100644
  	ksu_strncpy_from_user_nofault(path, *filename_user, sizeof(path));
  
  	if (unlikely(!memcmp(path, su, sizeof(su)))) {
-@@ -84,27 +88,49 @@ int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
+@@ -84,27 +87,49 @@ int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
  	return 0;
  }
  
@@ -112,7 +111,7 @@ index 9245e299..91600d2c 100644
  // Remove this later!! we use syscall hook, so this will never happen!!!!!
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0) && 0
  	// it becomes a `struct filename *` after 5.18
-@@ -171,8 +197,12 @@ int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
+@@ -171,8 +196,12 @@ int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
  			       void *__never_use_argv, void *__never_use_envp,
  			       int *__never_use_flags)
  {
@@ -126,11 +125,10 @@ index 9245e299..91600d2c 100644
  
  #ifndef CONFIG_KSU_KPROBES_HOOK
  	if (!ksu_sucompat_non_kp) {
-@@ -182,8 +212,9 @@ int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
- 
+@@ -183,7 +212,9 @@ int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
  	if (unlikely(!filename_user))
  		return 0;
--
+ 
 +#ifndef CONFIG_KSU_SUSFS_SUS_SU
  	memset(path, 0, sizeof(path));
 +#endif
