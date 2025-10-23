@@ -8,9 +8,10 @@
 > KSU的稳定版是最新TAG，也就是[v1.0.5](https://github.com/tiann/KernelSU/tree/v1.0.5)，4月22日发布的那个）
 > 
 > 最近更新：
-> 1. SUSFS 1.5.11适配（GKI6.1）
+> 1. SUSFS 1.5.12，但关闭 `SUS_MAP` 功能(隐藏部分内存映射真实文件)，原因是只有部分GKI版本可以成功编译
 > 2. 防格机模块支持 https://github.com/vc-teahouse/Baseband-guard //可在Action勾选
 > 3. 不再处理BBG的报错问题，如果报错就取消勾选
+> 4. KSU-NEXT 无ROOT是一个BUG，原因不明，可下载[v1.1.1管理器](https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v1.1.1/KernelSU_Next_v1.1.1_12851-release.apk)解决
 
 
 
