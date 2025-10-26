@@ -6,18 +6,15 @@
 >
 > SUKISU，编译时你无论选择Dev或Stable，是不一样的结果，追求稳定选择Stable；
 > KSU的稳定版是最新TAG，也就是[v1.0.5](https://github.com/tiann/KernelSU/tree/v1.0.5)，4月22日发布的那个）
-> 
-> 最近更新：
-> 1. SUSFS 1.5.12，但关闭 `SUS_MAP` 功能(隐藏部分内存映射真实文件)，原因是只有部分GKI版本可以成功编译
-> 2. 防格机模块支持 https://github.com/vc-teahouse/Baseband-guard //可在Action勾选
-> 3. 不再处理BBG的报错问题，如果报错就取消勾选
-> 4. KSU-NEXT 无ROOT是一个BUG，原因不明，可下载[v1.1.1管理器](https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v1.1.1/KernelSU_Next_v1.1.1_12851-release.apk)解决
+>
+
+已知:KSU-NEXT 无ROOT是一个BUG（可能由在sukisu和next之间频繁切换导致），原因不明，可下载[v1.1.1管理器](https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v1.1.1/KernelSU_Next_v1.1.1_12851-release.apk)解决
 
 
 
 ### 无限重启？
-1. 一加：colorOS15魔改过f2fs，已经不兼容GKI的f2fs，除非进入rec清除Data重启
-2. 小米：一些机型因为启动引导因avb验证导致无法启动分区，如红米k50，需要关闭avb验证（https://magiskcn.com/disable-avb）
+1. 一加/真我/op：colorOS15魔改过f2fs，已经不兼容GKI的f2fs，除非进入rec清除Data重启
+2. 小米：少数机型因为启动引导因avb验证导致无法启动分区，需要关闭avb验证（https://magiskcn.com/disable-avb）
 3. zram:一些机型或系统使用了带zram补丁的内核也可能，遇到该情况可以刷[Release](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases)中不带zram的内核，或者在编译选项中不勾选[增加更多ZRAM算法]以编译无zram的内核
 4. 其他：其他手机也可能因为相似的兼容问题，如果有可以补充。。。
 
