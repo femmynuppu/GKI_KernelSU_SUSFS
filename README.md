@@ -5,8 +5,8 @@
 > 第一次使用务必**详细阅读**以下内容，不要因为懒惰而占用他人时间！
 >
 > SUKISU，编译时你无论选择Dev或Stable，是不一样的结果，追求稳定选择Stable；
-> KSU的稳定版是最新TAG，也就是[v1.0.5](https://github.com/tiann/KernelSU/tree/v1.0.5)，4月22日发布的那个）
->
+> KSU的稳定版是最新TAG，也就是[v2.0.0](https://github.com/tiann/KernelSU/tree/v1.0.5)，但目前无法编译）
+> 目前SUKISU和官方版处于更新阶段，NEXT和MKSU更新较缓慢
 
 已知:KSU-NEXT 无ROOT是一个BUG（可能由在sukisu和next之间频繁切换导致），原因不明，可下载[v1.1.1管理器](https://github.com/KernelSU-Next/KernelSU-Next/releases/download/v1.1.1/KernelSU_Next_v1.1.1_12851-release.apk)解决
 
