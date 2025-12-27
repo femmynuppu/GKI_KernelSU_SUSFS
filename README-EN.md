@@ -13,4 +13,5 @@ Reference release: [hymo+gki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/rel
 ## Documentation
 
 The detailed guide is maintained in the bilingual [GitHub Wiki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki)
+[Changelog: doc/CHANGELOG-EN.md](doc/CHANGELOG-EN.md)
 The wiki covers download/flash, bootloop handling, bug reporting, tips, KSU manager & SUSFS module, build time, emergency rescue, and kernel compatibility.
