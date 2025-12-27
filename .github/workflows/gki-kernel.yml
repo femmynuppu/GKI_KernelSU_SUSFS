@@ -429,7 +429,7 @@ jobs:
           patch -p1 --forward < "../../Action-Build/patches/optimized_mem_operations.patch"
           patch -p1 --forward < "../../Action-Build/patches/file_struct_8bytes_align.patch"
           patch -p1 --forward < "../../Action-Build/patches/reduce_cache_pressure.patch"
-          if [ "${{ inputs.kernel_version }}" = "6.1" ] || [ "${{ inputs.kernel_version }}" = "6.6" ]; then
+          if [ "${{ inputs.kernel_version }}" = "5.10" ] || [ "${{ inputs.kernel_version }}" = "5.15" ]; then
             patch -p1 --forward < "../../Action-Build/patches/clear_page_16bytes_align.patch"
             echo "Patching unicode!"
             patch -p1 --forward < "../../Action-Build/patches/unicode_bypass_fix_6.1-.patch"
