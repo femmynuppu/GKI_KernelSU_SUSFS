@@ -654,6 +654,9 @@ jobs:
       - name: 添加 SUSFS 配置
         if: ${{ !inputs.cancel_susfs }}
         run: |
+          echo "更改为配置目录: $CONFIG..."
+          cd "$CONFIG"
+          echo "Adding configuration settings to gki_defconfig..."
           # Add SUSFS configuration settings
           echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> ./common/arch/arm64/configs/gki_defconfig
