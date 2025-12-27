@@ -37,6 +37,11 @@ on:
         required: true
         type: boolean
         default: true
+      cancel_susfs:
+        description: '取消susfs'
+        required: false
+        type: boolean
+        default: false
       onlyAk3:
         description: '仅上传AK3压缩包?(无boot,下载更快)'
         required: false
@@ -88,3 +93,4 @@ jobs:
       supp_op: ${{ inputs.supp_op || false }}
       onlyAk3: ${{ inputs.onlyAk3 || false }}
       build_time: ${{ inputs.build_time || '' }}
+      cancel_susfs: ${{ inputs.cancel_susfs || '' }}

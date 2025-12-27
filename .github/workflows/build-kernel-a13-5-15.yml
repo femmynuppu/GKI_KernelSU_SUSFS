@@ -49,6 +49,11 @@ on:
         required: true
         type: boolean
         default: true
+      cancel_susfs:
+        description: '取消susfs'
+        required: true
+        type: boolean
+        default: false
       get_manager:
         description: '获取最新KSU管理器和SUS模块?'
         required: true
@@ -73,6 +78,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
+      cancel_susfs: ${{ inputs.cancel_susfs }}
       onlyAk3: ${{ inputs.onlyAk3 }}
       build_time: ${{ inputs.build_time }}
   get-ksu-manager:
