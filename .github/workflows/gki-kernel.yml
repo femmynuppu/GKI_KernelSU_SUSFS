@@ -523,6 +523,13 @@ jobs:
           cp "../../../kernel_patches/samsung/min_kdp/min_kdp.c" min_kdp.c
           echo "obj-y += min_kdp.o" >> Makefile
 
+      - name: 修复小米 6.6 GKI设备上的Wi-Fi和蓝牙功能
+        if: ${{ ( inputs.kernel_version == '6.6' ) }}
+        run: |
+          echo "[+] 将小米设备所需的导出符号添加到 abi_gki_aarch64_xiaomi"
+          SYMBOL_LIST=$CONFIG/common/android/abi_gki_aarch64_xiaomi
+          echo "device_find_any_child" >> $SYMBOL_LIST
+
       - name: LZ4KD & Lz4k_oplus配置
         if: ${{ inputs.use_zram }}
         run: |
