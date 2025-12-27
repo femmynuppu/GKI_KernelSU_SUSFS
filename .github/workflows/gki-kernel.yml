@@ -49,6 +49,10 @@ on:
         required: true
         type: boolean
         default: true
+      cancel_susfs:
+        required: false
+        type: boolean
+        default: false
       supp_op:
         required: true
         type: boolean
@@ -60,7 +64,6 @@ on:
       build_time:
         required: false
         type: string
-
 jobs:
   build-kernel-kernelsu-susfs:
     runs-on: ubuntu-latest
@@ -270,6 +273,11 @@ jobs:
               ;;
           esac
 
+          # 如果选择了 SukiSU 且取消 SUSFS，则强制使用 main 分支
+          if [ "$variant_input" = "SukiSU" ] && [ "${{ inputs.cancel_susfs }}" = "true" ]; then
+            echo "BRANCH=-s main" >> $GITHUB_ENV
+          fi
+
       - name: 添加 KernelSU
         run: |
           echo "切换到配置目录 $CONFIG"
@@ -300,6 +308,7 @@ jobs:
           fi
 
       - name: 为 KernelSU 变体安装 SUSFS 补丁
+        if: ${{ !inputs.cancel_susfs }}
         run: |
           echo "切换到配置目录 $CONFIG"
           cd "$CONFIG"
@@ -381,6 +390,7 @@ jobs:
           fi
   
       - name: 一些修复补丁
+        if: ${{ !inputs.cancel_susfs }}
         run: |
           cd "$CONFIG/common"
           FORMATTED_BRANCH="${{ inputs.android_version }}-${{ inputs.kernel_version }}"
@@ -576,7 +586,7 @@ jobs:
             grep "baseband_guard" common/security/Kconfig
           fi
 
-      - name: 添加SUSFS配置设置
+      - name: 添加配置
         run: |
           echo "更改为配置目录: $CONFIG..."
           cd "$CONFIG"
@@ -588,7 +598,13 @@ jobs:
           if [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
           fi
-          
+
+          # Remove check_defconfig
+          sed -i 's/check_defconfig//' ./common/build.config.gki
+
+      - name: 添加 SUSFS 配置
+        if: ${{ !inputs.cancel_susfs }}
+        run: |
           # Add SUSFS configuration settings
           echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -606,11 +622,6 @@ jobs:
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> ./common/arch/arm64/configs/gki_defconfig
           
-          # Remove check_defconfig
-          sed -i 's/check_defconfig//' ./common/build.config.gki
-
-          # 用于debug config
-          tail -n 40 ./common/arch/arm64/configs/gki_defconfig
 
       - name: 配置内核构时间/删除dirty字符
         run: |

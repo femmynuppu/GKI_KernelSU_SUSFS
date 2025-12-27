@@ -55,6 +55,11 @@ on:
         required: true
         type: boolean
         default: true
+      cancel_susfs:
+        description: '取消susfs'
+        required: true
+        type: boolean
+        default: false
       get_manager:
         description: '是否同时获取最新KSU管理器?'
         required: true
@@ -79,6 +84,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
       use_bbg: ${{ inputs.use_bbg }}
+      cancel_susfs: ${{ inputs.cancel_susfs }}
 
   # build-kernel-a13-5-10:
   #   uses: ./.github/workflows/kernel-a13-5.10.yml
@@ -104,6 +110,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
       use_bbg: ${{ inputs.use_bbg }}
+      cancel_susfs: ${{ inputs.cancel_susfs }}
 
   # build-kernel-a14-5-15:
   #   uses: ./.github/workflows/kernel-a14-5.15.yml
@@ -129,6 +136,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
       use_bbg: ${{ inputs.use_bbg }}
+      cancel_susfs: ${{ inputs.cancel_susfs }}
 
   build-kernel-a15-6-6:
     uses: ./.github/workflows/kernel-a15-6.6.yml
@@ -142,6 +150,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
       use_bbg: ${{ inputs.use_bbg }}
+      cancel_susfs: ${{ inputs.cancel_susfs }}
 
   trigger-release:
     runs-on: ubuntu-latest

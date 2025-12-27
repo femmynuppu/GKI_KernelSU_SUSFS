@@ -49,6 +49,11 @@ on:
         required: true
         type: boolean
         default: true
+      cancel_susfs:
+        description: '取消susfs'
+        required: true
+        type: boolean
+        default: false
       supp_op:
         description: '是否开启一加8E处理器机型支持?(非该机型无须勾)'
         required: false
@@ -78,6 +83,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
+      cancel_susfs: ${{ inputs.cancel_susfs }}
       supp_op: ${{ inputs.supp_op }}
       onlyAk3: ${{ inputs.onlyAk3 }}
       build_time: ${{ inputs.build_time }}
