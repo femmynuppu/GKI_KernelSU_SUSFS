@@ -178,6 +178,7 @@ jobs:
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
           # next修复补丁
           git clone https://github.com/zzh20188/GKI_KernelSU_SUSFS.git zzh_patch
+          git clone https://github.com/Numbersf/Action-Build.git --depth=1
           
       - name: 设置 CONFIG 环境变量
         run: |
@@ -423,6 +424,23 @@ jobs:
                 sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
               fi
             fi
+          fi
+
+      - name: Apply UNICODE_BYPASS and MEMORY_OPT
+        if: ${{ !inputs.cancel_susfs }}
+        run: |
+          cd "$CONFIG/common"
+          patch -p1 --forward < "../../Action-Build/patches/optimized_mem_operations.patch"
+          patch -p1 --forward < "../../Action-Build/patches/file_struct_8bytes_align.patch"
+          patch -p1 --forward < "../../Action-Build/patches/reduce_cache_pressure.patch"
+          if [ "${{ inputs.kernel_version }}" = "6.1" ] || [ "${{ inputs.kernel_version }}" = "6.6" ]; then
+            patch -p1 --forward < "../../Action-Build/patches/clear_page_16bytes_align.patch"
+            echo "Patching unicode!"
+            patch -p1 --forward < "../../Action-Build/patches/unicode_bypass_fix_6.1-.patch"
+          else
+            cat "../../Action-Build/patches/clear_page_16bytes_align.patch" | sed -e 's/SYM_FUNC_START_PI(clear_page)/SYM_FUNC_START_PI(__pi_clear_page)/' | patch -p1 -F3 --forward
+            echo "Patching unicode!"
+            patch -p1 --forward < "../../Action-Build/patches/unicode_bypass_fix_6.1+.patch"
           fi
       
       - name: 升级LZ4至1.10.0
