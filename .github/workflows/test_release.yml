@@ -192,7 +192,7 @@ jobs:
           elif [[ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]]; then
             BRANCH="main"
           elif [[ "${{ inputs.kernelsu_variant }}" == "Next" ]]; then
-            BRANCH="next"
+            BRANCH="dev"
           else
             echo "Error: Custom branch not provided for 'Other(其他/指定)'" >&2
             exit 1
