@@ -93,4 +93,4 @@ jobs:
       supp_op: ${{ inputs.supp_op || false }}
       onlyAk3: ${{ inputs.onlyAk3 || false }}
       build_time: ${{ inputs.build_time || '' }}
-      cancel_susfs: ${{ inputs.cancel_susfs || '' }}
+      cancel_susfs: ${{ inputs.cancel_susfs || false }}
