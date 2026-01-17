@@ -243,15 +243,37 @@ jobs:
           $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
           echo "REMOTE_BRANCH=$REMOTE_BRANCH" >> $GITHUB_ENV
 
-          FORMATTED_BRANCH="${{ inputs.android_version }}-${{ inputs.kernel_version }}"
-          if grep -q deprecated <<< "$REMOTE_BRANCH" && \
-             { [ "$FORMATTED_BRANCH" == "android13-5.15" ] && \
-               [ ${{ inputs.sub_level }} -lt 123 ]; }; then
-            echo '修复 5.15 仅支持旧版 C 库的问题'
-            cd ./common
-            curl -LSsO https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/dev/5.15-patch/fix_5.15.legacy.patch
-            patch -p1 < fix_5.15.legacy.patch
-          fi
+          # FORMATTED_BRANCH="${{ inputs.android_version }}-${{ inputs.kernel_version }}"
+          # if grep -q deprecated <<< "$REMOTE_BRANCH" && \
+          #    { [ "$FORMATTED_BRANCH" == "android13-5.15" ] && \
+          #      [ ${{ inputs.sub_level }} -lt 123 ]; }; then
+          #   echo '修复 5.15 仅支持旧版 C 库的问题'
+          #   cd ./common
+          #   curl -LSsO https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/dev/5.15-patch/fix_5.15.legacy.patch
+          #   patch -p1 < fix_5.15.legacy.patch
+          # fi
+
+      - name: 应用 glibc 2.38 兼容修复
+        run: |
+          ACTUAL_SUBLEVEL=${{ inputs.sub_level }}
+          if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.10" && $ACTUAL_SUBLEVEL -le 186 ]] || 
+             [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.15" && $ACTUAL_SUBLEVEL -le 119 ]] || 
+             [[ "${{ inputs.android_version }}" == "android14" && "${{ inputs.kernel_version }}" == "5.15" && $ACTUAL_SUBLEVEL -le 110 ]] || 
+             [[ "${{ inputs.android_version }}" == "android14" && "${{ inputs.kernel_version }}" == "6.1" && $ACTUAL_SUBLEVEL -le 43 ]]; then
+            GLIBC_VERSION=$(ldd --version 2>/dev/null | head -n 1 | awk '{print $NF}') 
+            if [ "$(printf '%s\n' "2.38" "$GLIBC_VERSION" | sort -V | head -n1)" = "2.38" ]; then 
+              cd "$CONFIG/common"
+              sed -i '/\$(Q)\$(MAKE) -C \$(SUBCMD_SRC) OUTPUT=\$(abspath \$(dir \$@))\/ \$(abspath \$@)/s//$(Q)$(MAKE) -C $(SUBCMD_SRC) EXTRA_CFLAGS="$(CFLAGS)" OUTPUT=$(abspath $(dir $@))\/ $(abspath $@)/' tools/bpf/resolve_btfids/Makefile 2>/dev/null || true
+              if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.10" && $ACTUAL_SUBLEVEL -le 186 ]] || 
+                 [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.15" && $ACTUAL_SUBLEVEL -le 119 ]] || 
+                 [[ "${{ inputs.android_version }}" == "android14" && "${{ inputs.kernel_version }}" == "5.15" && $ACTUAL_SUBLEVEL -le 110 ]]; then
+                sed -i '/char \*buf = NULL;/a int i;' tools/lib/subcmd/parse-options.c 2>/dev/null || true
+                sed -i 's/for (int i = 0; subcommands\[i\]; i++) {/for (i = 0; subcommands[i]; i++) {/' tools/lib/subcmd/parse-options.c 2>/dev/null || true
+                sed -i '/if (subcommands) {/a int i;' tools/lib/subcmd/parse-options.c 2>/dev/null || true
+                sed -i 's/for (int i = 0; subcommands\[i\]; i++)/for (i = 0; subcommands[i]; i++)/' tools/lib/subcmd/parse-options.c 2>/dev/null || true
+              fi
+            fi
+          fi 
 
       - name: 使GKI在一加8E平台正常使用
         if: ${{ inputs.supp_op }}
@@ -456,21 +478,15 @@ jobs:
             fi
           fi
 
-      # - name: Apply UNICODE_BYPASS and MEMORY_OPT
-      #   if: ${{ !inputs.cancel_susfs }}
-      #   run: |
-      #     cd "$CONFIG/common"
-      #     patch -p1 --forward < "../../Action-Build/patches/optimized_mem_operations.patch"
-      #     patch -p1 --forward < "../../Action-Build/patches/file_struct_8bytes_align.patch"
-      #     patch -p1 --forward < "../../Action-Build/patches/reduce_cache_pressure.patch"
-      #     if [ "${{ inputs.kernel_version }}" = "5.10" ] || [ "${{ inputs.kernel_version }}" = "5.15" ]; then
-      #       patch -p1 --forward < "../../Action-Build/patches/clear_page_16bytes_align.patch"
-      #       patch -p1 --forward < "../../Action-Build/patches/unicode_bypass_fix_2_6.1-.patch" || true
-      #       patch -p1 --forward < "../../Action-Build/patches/unicode_bypass_fix_6.1-.patch" || true
-      #     else
-      #       cat "../../Action-Build/patches/clear_page_16bytes_align.patch" | sed -e 's/SYM_FUNC_START_PI(clear_page)/SYM_FUNC_START_PI(__pi_clear_page)/' | patch -p1 -F3 --forward
-      #       patch -p1 --forward < "../../Action-Build/patches/unicode_bypass_fix_6.1+.patch" || true
-      #     fi
+      - name: Apply UNICODE_BYPASS and MEMORY_OPT
+        if: ${{ !inputs.cancel_susfs }}
+        run: |
+          cd "$CONFIG/common"
+          if [ "${{ inputs.kernel_version }}" = "5.10" ] || [ "${{ inputs.kernel_version }}" = "5.15" ]; then
+            patch -p1 --forward < "../../Action-Build/patches/unicode_bypass_fix_6.1-.patch" || true
+          else
+            patch -p1 --forward < "../../Action-Build/patches/unicode_bypass_fix_6.1+.patch" || true
+          fi
           
       - name: 升级LZ4至1.10.0
         if: ${{ inputs.use_zram }}
