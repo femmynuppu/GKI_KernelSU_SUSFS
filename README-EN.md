@@ -3,18 +3,15 @@
 Automated GKI kernel builds via GitHub Actions ([Chinese](README.md)/English).
 
 > Not supported on OnePlus ColorOS 14/15. You may need to wipe data after flashing.
->
-> SUKISU builds: `stable` uses the `builtin` branch (high bootloop risk); `dev` uses the `tmp-builtin` branch (more stable, but untouched for two weeks).
 
-Attempted to build a GKI kernel with [hymo](https://github.com/Anatdx/hymo) mount meta-module integration, but the project currently only supports 6.6, so it is not fully merged into the main branch.
+Attempted to build a GKI kernel with [hymo mount meta-module](https://github.com/Anatdx/hymo) integration, but the project currently only supports 6.6, so it is not fully merged into the main branch.
+
 Reference release: [hymo+gki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r24)
 
+Attempted to build a GKI kernel with [ReSukisu](https://github.com/ReSukiSU/ReSukiSU) integration, reference release: [resukisu+gki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r26)
 
-Prebuilt builds no longer include the patch; please use the [Unicode zero-width fix module](https://t.me/real5ec1cff/268) Xp module instead.
+Prebuilt builds support the zero-width fix patch, or you can directly use the [Unicode zero-width fix module](https://t.me/real5ec1cff/268) Xp module.
 
-## KernelSU beyond SUKISU?
-Nearly all builds no longer use SUSFS, or even GKI, and compatibility is hard to guarantee.
-Therefore this project uses GKI without SUSFS.
 
 ## Documentation and Guides
 
@@ -37,4 +34,6 @@ The wiki covers downloading and flashing, bootloop recovery, bug reporting, tips
 ### Xp Modules
 1. FuseFixer.apk
     * [Unicode zero-width fix module](https://t.me/real5ec1cff/268)
+
 ### To be expanded...
+

@@ -3,14 +3,12 @@
 > 目前不支持一加 ColorOS14、15，刷入后可能需要清除数据开机。
 
 尝试构建集成 [hymo 挂载元模块](https://github.com/Anatdx/hymo) 的 GKI 内核，但该项目目前仅支持 6.6，因此未完整合并到本仓库主分支。
+
 参考发布：[hymo+gki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r24)
 
+尝试构建集成 [ReSukisu](https://github.com/ReSukiSU/ReSukiSU) 的 GKI 内核,参考发布：[resukisu+gki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r26)
 
-预构建取消补丁，请直接使用[Unicode零宽修复模块](https://t.me/real5ec1cff/268) Xp模块
-
-## SUKISU 之外的KernelSU？
-几乎都不再使用SUSFS，甚至GKI，兼容性难以保证。
-因此在本项目中均使用无SUSFS的GKI。
+预构建支持零宽修复补丁，也可以直接使用[Unicode零宽修复模块](https://t.me/real5ec1cff/268) Xp模块
 
 
 ## 文档与指南
