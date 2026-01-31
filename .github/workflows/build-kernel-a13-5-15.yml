@@ -1,9 +1,9 @@
-name: 编译内核a13-5-15
+name: 编译内核 Android13 5.15
 
 permissions:
-  contents: write  # Allow writing to repository contents (for pushing tags)
-  actions: write   # Allows triggering actions
-  
+  contents: write
+  actions: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -64,26 +64,85 @@ on:
         required: false
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      kernelsu_variant:
+        required: true
+        type: string
+      kernelsu_branch:
+        required: true
+        type: string
+      version:
+        required: false
+        type: string
+      build_time:
+        required: false
+        type: string
+      use_zram:
+        required: true
+        type: boolean
+      use_bbg:
+        required: true
+        type: boolean
+      use_kpm:
+        required: true
+        type: boolean
+      cancel_susfs:
+        required: false
+        type: boolean
+      onlyAk3:
+        required: false
+        type: boolean
 
 jobs:
-
   build-kernel-a13-5-15:
-    uses: ./.github/workflows/kernel-a13-5.15.yml
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sub_level: "74"
+            os_patch_level: "2023-01"
+          - sub_level: "94"
+            os_patch_level: "2023-05"
+          - sub_level: "104"
+            os_patch_level: "2023-07"
+          - sub_level: "123"
+            os_patch_level: "2023-11"
+          - sub_level: "137"
+            os_patch_level: "2024-01"
+          - sub_level: "144"
+            os_patch_level: "2024-03"
+          - sub_level: "148"
+            os_patch_level: "2024-05"
+          - sub_level: "167"
+            os_patch_level: "2024-11"
+          - sub_level: "170"
+            os_patch_level: "2025-01"
+          - sub_level: "178"
+            os_patch_level: "2025-03"
+          - sub_level: "X"
+            os_patch_level: "lts"
+    uses: ./.github/workflows/gki-kernel.yml
     secrets: inherit
     with:
+      android_version: "android13"
+      kernel_version: "5.15"
+      sub_level: ${{ matrix.sub_level }}
+      os_patch_level: ${{ matrix.os_patch_level }}
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
-      version: ${{ inputs.version }}
+      version: ${{ inputs.version || '' }}
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
-      cancel_susfs: ${{ inputs.cancel_susfs }}
-      onlyAk3: ${{ inputs.onlyAk3 }}
-      build_time: ${{ inputs.build_time }}
+      supp_op: false
+      onlyAk3: ${{ inputs.onlyAk3 || false }}
+      build_time: ${{ inputs.build_time || '' }}
+      cancel_susfs: ${{ inputs.cancel_susfs || false }}
+
   get-ksu-manager:
-    if: ${{ inputs.get_manager }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.get_manager }}
     uses: ./.github/workflows/get-manager.yml
     secrets: inherit
     with:
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
-

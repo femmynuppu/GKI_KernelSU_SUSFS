@@ -1,39 +1,121 @@
+<div align="center">
+
 # GKI KernelSU SUSFS
 
-Automated GKI kernel builds via GitHub Actions ([Chinese](README.md)/English).
+**Automated GKI Kernel Builds | KernelSU + SUSFS Integration**
 
-> Not supported on OnePlus ColorOS 14/15. You may need to wipe data after flashing.
+[![GitHub Stars](https://img.shields.io/github/stars/zzh20188/GKI_KernelSU_SUSFS?style=for-the-badge&logo=github&color=yellow)](https://github.com/zzh20188/GKI_KernelSU_SUSFS/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/zzh20188/GKI_KernelSU_SUSFS?style=for-the-badge&logo=github&color=blue)](https://github.com/zzh20188/GKI_KernelSU_SUSFS/network/members)
+[![GitHub Release](https://img.shields.io/github/v/release/zzh20188/GKI_KernelSU_SUSFS?style=for-the-badge&logo=android&color=green)](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases)
+[![GitHub Actions](https://img.shields.io/github/actions/workflow/status/zzh20188/GKI_KernelSU_SUSFS/gki-kernel.yml?style=for-the-badge&logo=github-actions&label=Build)](https://github.com/zzh20188/GKI_KernelSU_SUSFS/actions)
 
-Attempted to build a GKI kernel with [hymo mount meta-module](https://github.com/Anatdx/hymo) integration, but the project currently only supports 6.6, so it is not fully merged into the main branch.
+English | [**简体中文**](README.md)
 
-Reference release: [hymo+gki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r24)
+---
 
-Attempted to build a GKI kernel with [ReSukisu](https://github.com/ReSukiSU/ReSukiSU) integration, reference release: [resukisu+gki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r26)
+</div>
 
-Prebuilt builds support the zero-width fix patch, or you can directly use the [Unicode zero-width fix module](https://t.me/real5ec1cff/268) Xp module.
+## 🚀 Quick Navigation
 
+<table>
+<tr>
+<td align="center" width="33%">
 
-## Documentation and Guides
+**📖 Docs**
 
-Detailed instructions are organized in the bilingual [GitHub Wiki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki); please check there first.
+[GitHub Wiki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki)
 
-[Changelog: doc/CHANGELOG-EN.md](doc/CHANGELOG-EN.md)
+</td>
+<td align="center" width="33%">
 
-The wiki covers downloading and flashing, bootloop recovery, bug reporting, tips, KSU manager and SUSFS modules, kernel build time, emergency rescue, and kernel version compatibility.
+**📥 Download**
 
-## After installing KernelSU ...
-> This section keeps a list of post-installation usage ideas, practical apps, and modules. All are official channels; order does not imply ranking.
-### Modules
-1. LSPosed-Irena
-    * [LSPosed-Irena repo](https://github.com/re-zero001/LSPosed-Irena)
-    * [LSPosed-Irena channel](https://t.me/lsposed_irena)
-2. Zygisk Next/TrickyStore
-    * [Zygisk Next repo](https://github.com/Dr-TSNG/ZygiskNext)
-    * [TrickyStore repo](https://github.com/5ec1cff/TrickyStore)
-    * [Zygisk Next/TrickyStore shared channel](https://t.me/real5ec1cff)
-### Xp Modules
-1. FuseFixer.apk
-    * [Unicode zero-width fix module](https://t.me/real5ec1cff/268)
+[Releases](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases)
 
-### To be expanded...
+</td>
+<td align="center" width="33%">
 
+**📋 Changelog**
+
+[CHANGELOG](doc/CHANGELOG-EN.md)
+
+</td>
+</tr>
+</table>
+
+---
+
+## ⚠️ Compatibility Notice
+
+> **Note:** Not supported on OnePlus ColorOS 14/15. You may need to wipe data after flashing.
+
+---
+
+## ✨ Special Editions
+
+| Edition | Description | Download |
+|:---:|:---|:---:|
+| **hymo+gki** | Integrated [hymo mount meta-module](https://github.com/Anatdx/hymo) (6.6 only) | [Release v2.0.0-r24](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r24) |
+| **resukisu+gki** | Integrated [ReSukisu](https://github.com/ReSukiSU/ReSukiSU) | [Release v2.0.0-r26](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r26) |
+
+> 💡 Prebuilt versions include the zero-width fix patch. Alternatively, use the [Unicode zero-width fix module](https://t.me/real5ec1cff/268) (Xposed)
+
+---
+
+## 📚 Documentation & Guides
+
+For detailed instructions, please refer to the [**GitHub Wiki (Bilingual)**](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki)
+
+Wiki Contents:
+- 📥 Download & Flash Guide
+- 🔄 Bootloop Recovery
+- 🐛 Bug Reporting Guidelines
+- 💡 Tips & Tricks
+- 📱 KSU Manager & SUSFS Module
+- ⏰ Kernel Build Time Info
+- 🆘 Emergency Rescue Guide
+- 📊 Kernel Version Compatibility
+
+---
+
+## 🛠️ Post-Installation Recommendations
+
+### 📦 Recommended Modules
+
+<table>
+<tr>
+<th>Module</th>
+<th>Repository</th>
+<th>Channel</th>
+</tr>
+<tr>
+<td><b>LSPosed-Irena</b></td>
+<td><a href="https://github.com/re-zero001/LSPosed-Irena">GitHub</a></td>
+<td><a href="https://t.me/lsposed_irena">Telegram</a></td>
+</tr>
+<tr>
+<td><b>Zygisk Next</b></td>
+<td><a href="https://github.com/Dr-TSNG/ZygiskNext">GitHub</a></td>
+<td rowspan="2"><a href="https://t.me/real5ec1cff">Telegram</a></td>
+</tr>
+<tr>
+<td><b>TrickyStore</b></td>
+<td><a href="https://github.com/5ec1cff/TrickyStore">GitHub</a></td>
+</tr>
+</table>
+
+### 🔧 Xposed Modules
+
+| Module | Description |
+|:---:|:---|
+| **FuseFixer** | [Unicode zero-width fix module](https://t.me/real5ec1cff/268) |
+
+---
+
+<div align="center">
+
+**More content coming soon...**
+
+⭐ If this project helps you, please give it a Star!
+
+</div>

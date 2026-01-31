@@ -1,37 +1,121 @@
+<div align="center">
+
 # GKI KernelSU SUSFS
-使用github Action自动构建 GKI 内核 （中文/[ENGLISH](README-EN.md)）
-> 目前不支持一加 ColorOS14、15，刷入后可能需要清除数据开机。
 
-尝试构建集成 [hymo 挂载元模块](https://github.com/Anatdx/hymo) 的 GKI 内核，但该项目目前仅支持 6.6，因此未完整合并到本仓库主分支。
+**自动化构建 GKI 内核 | 集成 KernelSU + SUSFS**
 
-参考发布：[hymo+gki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r24)
+[![GitHub Stars](https://img.shields.io/github/stars/zzh20188/GKI_KernelSU_SUSFS?style=for-the-badge&logo=github&color=yellow)](https://github.com/zzh20188/GKI_KernelSU_SUSFS/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/zzh20188/GKI_KernelSU_SUSFS?style=for-the-badge&logo=github&color=blue)](https://github.com/zzh20188/GKI_KernelSU_SUSFS/network/members)
+[![GitHub Release](https://img.shields.io/github/v/release/zzh20188/GKI_KernelSU_SUSFS?style=for-the-badge&logo=android&color=green)](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases)
+[![GitHub Actions](https://img.shields.io/github/actions/workflow/status/zzh20188/GKI_KernelSU_SUSFS/gki-kernel.yml?style=for-the-badge&logo=github-actions&label=Build)](https://github.com/zzh20188/GKI_KernelSU_SUSFS/actions)
 
-尝试构建集成 [ReSukisu](https://github.com/ReSukiSU/ReSukiSU) 的 GKI 内核,参考发布：[resukisu+gki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r26)
+[**English**](README-EN.md) | 简体中文
 
-预构建支持零宽修复补丁，也可以直接使用[Unicode零宽修复模块](https://t.me/real5ec1cff/268) Xp模块
+---
 
+</div>
 
-## 文档与指南
+## 🚀 快速导航
 
-详细说明已整理到 [GitHub Wiki（中英双语）](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki)，请优先查阅
+<table>
+<tr>
+<td align="center" width="33%">
 
-[更新记录：doc/CHANGELOG.md](doc/CHANGELOG.md)
+**📖 文档**
 
-Wiki 包含：下载与刷写、无限重启处理、BUG 反馈指引、Tips、KSU 管理器与 SUSFS 模块、内核构建时间、紧急救援指南、内核版本兼容性说明等内容。
+[GitHub Wiki](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki)
 
-## KernelSU安装后 ...
-> 此处更新安装后的玩法/实用软件/模块的List，均为官方渠道，排名不分先后
-### 模块
-1. LSPosed-Irena
-    * [LSPosed-Irena仓库](https://github.com/re-zero001/LSPosed-Irena)
-    * [LSPosed-Irena频道](https://t.me/lsposed_irena)
-2. Zygisk Next/TrickyStore
-    * [Zygisk Next仓库](https://github.com/Dr-TSNG/ZygiskNext)
-    * [TrickyStore仓库](https://github.com/5ec1cff/TrickyStore)
-    * [Zygisk Next/TrickyStore共频道](https://t.me/real5ec1cff)
-### Xp模块
-1. FuseFixer.apk
-    * [Unicode零宽修复模块](https://t.me/real5ec1cff/268)
+</td>
+<td align="center" width="33%">
 
-### 待完善...
+**📥 下载**
 
+[Releases](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases)
+
+</td>
+<td align="center" width="33%">
+
+**📋 更新日志**
+
+[CHANGELOG](doc/CHANGELOG.md)
+
+</td>
+</tr>
+</table>
+
+---
+
+## ⚠️ 兼容性提醒
+
+> **注意：** 目前不支持一加 ColorOS 14、15，刷入后可能需要清除数据开机。
+
+---
+
+## ✨ 特色版本
+
+| 版本 | 说明 | 下载链接 |
+|:---:|:---|:---:|
+| **hymo+gki** | 集成 [hymo 挂载元模块](https://github.com/Anatdx/hymo)（仅支持 6.6） | [Release v2.0.0-r24](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r24) |
+| **resukisu+gki** | 集成 [ReSukisu](https://github.com/ReSukiSU/ReSukiSU) | [Release v2.0.0-r26](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r26) |
+
+> 💡 预构建版本已支持零宽修复补丁，也可使用 [Unicode零宽修复模块](https://t.me/real5ec1cff/268) (Xposed)
+
+---
+
+## 📚 文档与指南
+
+详细说明请查阅 [**GitHub Wiki（中英双语）**](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki)
+
+Wiki 涵盖内容：
+- 📥 下载与刷写指南
+- 🔄 无限重启处理
+- 🐛 BUG 反馈指引
+- 💡 使用技巧 Tips
+- 📱 KSU 管理器与 SUSFS 模块
+- ⏰ 内核构建时间说明
+- 🆘 紧急救援指南
+- 📊 内核版本兼容性说明
+
+---
+
+## 🛠️ 安装后推荐
+
+### 📦 模块推荐
+
+<table>
+<tr>
+<th>模块名称</th>
+<th>仓库</th>
+<th>频道</th>
+</tr>
+<tr>
+<td><b>LSPosed-Irena</b></td>
+<td><a href="https://github.com/re-zero001/LSPosed-Irena">GitHub</a></td>
+<td><a href="https://t.me/lsposed_irena">Telegram</a></td>
+</tr>
+<tr>
+<td><b>Zygisk Next</b></td>
+<td><a href="https://github.com/Dr-TSNG/ZygiskNext">GitHub</a></td>
+<td rowspan="2"><a href="https://t.me/real5ec1cff">Telegram</a></td>
+</tr>
+<tr>
+<td><b>TrickyStore</b></td>
+<td><a href="https://github.com/5ec1cff/TrickyStore">GitHub</a></td>
+</tr>
+</table>
+
+### 🔧 Xposed 模块
+
+| 模块 | 说明 |
+|:---:|:---|
+| **FuseFixer** | [Unicode零宽修复模块](https://t.me/real5ec1cff/268) |
+
+---
+
+<div align="center">
+
+**更多内容持续更新中...**
+
+⭐ 如果这个项目对你有帮助，请点个 Star 支持一下！
+
+</div>

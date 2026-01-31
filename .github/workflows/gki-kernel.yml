@@ -835,7 +835,7 @@ jobs:
           esac
           
           cd SukiSU_patch/
-          git checkout 83aa64b7548890bb1f2eff6c990c03a1802df27b
+          # git checkout 83aa64b7548890bb1f2eff6c990c03a1802df27b
           cd ..
 
           cp -r SukiSU_patch/kpm/patch_linux "$target_path/patch"
