@@ -208,7 +208,7 @@ jobs:
             git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
           fi
                   
-          git clone https://github.com/WildPlusKernel/kernel_patches.git
+          git clone https://github.com/WildKernels/kernel_patches.git
           # Sukisu的补丁仓库
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
           # next修复补丁
@@ -400,25 +400,43 @@ jobs:
             # patch -p1 --fuzz=3 < mksu_core_hook.c.patch
 
           elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
-            # 临时恢复KSU-NEXT的dev编译
+            SUSFS_VERSION="2.0.0"
             echo "为 KernelSU-Next 应用 SUSFS 补丁..."
             cd ./KernelSU-Next
-            if [ "$BRANCH" == "-s next" ]; then
-              echo "当前处于 KernelSU-Next Dev 分支"
-              cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
-              patch -f -p1 --fuzz=3 --ignore-whitespace < 10_enable_susfs_for_ksu.patch || true
-              echo "应用临时修复补丁..."
-              cp ../../zzh_patch/next-patch/* ./
-              patch -p1 < fix_apk_sign.c.patch
-              patch -p1 < fix_supercalls.c.patch
-              patch -p1 < fix_Makefile.patch
-              patch -p1 < fix_app_profile.c.patch
-              patch -p1 < fix_app_profile.h.patch
-              patch -p1 < fix_selinux.h.patch
-              patch -p1 < fix_setuid_hook.c.patch
 
-              sed -i '8d' kernel/selinux/selinux.c
-            fi
+            # 应用 SUSFS 启用补丁
+            echo "应用 SUSFS 启用补丁..."
+            cp ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
+            patch -p1 < 10_enable_susfs_for_ksu.patch || true
+
+            # 应用 Next 专用修复补丁
+            echo "应用 Next 专用修复补丁..."
+            cp "../../kernel_patches/next/susfs_fix_patches/v${SUSFS_VERSION}/"*.patch ./
+
+            echo "修复 Makefile/kbuild..."
+            patch -p1 < fix_Makefile.patch || true
+            echo "修复 allowlist.c..."
+            patch -p1 < fix_allowlist.c.patch || true
+            echo "修复 apk_sign.c..."
+            patch -p1 < fix_apk_sign.c.patch || true
+            echo "修复 kernel_umount.c..."
+            patch -p1 < fix_kernel_umount.c.patch || true
+            echo "修复 ksu.c..."
+            patch -p1 < fix_ksu.c.patch || true
+            echo "修复 ksud.c..."
+            patch -p1 < fix_ksud.c.patch || true
+            echo "修复 selinux.c..."
+            patch -p1 < fix_selinux.c.patch || true
+            echo "修复 setuid_hook.c..."
+            patch -p1 < fix_setuid_hook.c.patch || true
+            echo "修复 sucompat.c..."
+            patch -p1 < fix_sucompat.c.patch || true
+            echo "修复 supercalls.c..."
+            patch -p1 < fix_supercalls.c.patch || true
+            echo "覆写 hook mode..."
+            patch -p1 < overwrite_hook_mode.patch || true
+            echo "应用 ksu_toolkit 补丁..."
+            patch -p1 < ksu_toolkit.patch || true
             
           elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
             echo "为 MKSU 应用 SUSFS 补丁..."
@@ -445,6 +463,87 @@ jobs:
 
           patch -p1 --fuzz=3 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
 
+          # Next 变体的版本特定修复 (移植自 WildKernels)
+          if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
+            SUSFS_VERSION="2.0.0"
+            CURRENT_SUB="${{ inputs.sub_level }}"
+
+            # 处理非数字 sub_level
+            if [[ ! "$CURRENT_SUB" =~ ^[0-9]+$ ]]; then
+              CURRENT_SUB=99999
+            fi
+
+            if [[ "${{ inputs.android_version }}" == "android12" && "${{ inputs.kernel_version }}" == "5.10" ]]; then
+              if [[ "$CURRENT_SUB" -le 209 ]]; then
+                sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+              fi
+              if [[ "$CURRENT_SUB" -le 117 ]]; then
+                cp ../../kernel_patches/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/fdinfo.c.patch ./
+                patch -p1 < fdinfo.c.patch || true
+              fi
+              if [[ "$CURRENT_SUB" -le 43 ]]; then
+                cp ../../kernel_patches/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/base.c.patch ./
+                patch -p1 < base.c.patch || true
+              fi
+            fi
+
+            if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.10" ]]; then
+              if [[ "$CURRENT_SUB" -le 107 ]]; then
+                cp ../../kernel_patches/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.10/fdinfo.c.patch ./
+                patch -p1 < fdinfo.c.patch || true
+              fi
+              if [[ "$CURRENT_SUB" -le 209 && "${{ inputs.os_patch_level }}" != "2024-05" ]]; then
+                sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+              fi
+            fi
+
+            if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.15" ]]; then
+              if [[ "$CURRENT_SUB" -le 41 ]]; then
+                cp ../../kernel_patches/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/namespace.c.patch ./
+                patch -p1 < namespace.c.patch || true
+                cp ../../kernel_patches/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/fdinfo.c.patch ./
+                patch -p1 < fdinfo.c.patch || true
+                cp ../../kernel_patches/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/open.c.patch ./
+                patch -p1 < open.c.patch || true
+                sed -i 's|is_i_uid_not_allowed(i_uid_into_mnt(i_user_ns(inode), inode).val)))|is_i_uid_not_allowed(inode->i_uid.val)))|g' fs/susfs.c
+              fi
+              if [[ "$CURRENT_SUB" -le 148 && "${{ inputs.os_patch_level }}" != "2024-05" ]]; then
+                sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+              fi
+            fi
+
+            if [[ "${{ inputs.android_version }}" == "android14" && "${{ inputs.kernel_version }}" == "5.15" ]]; then
+              if [[ "$CURRENT_SUB" -le 148 && "${{ inputs.os_patch_level }}" != "2024-05" ]]; then
+                sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+              fi
+            fi
+
+            if [[ "${{ inputs.android_version }}" == "android14" && "${{ inputs.kernel_version }}" == "6.1" ]]; then
+              if [[ "$CURRENT_SUB" -ge 145 ]]; then
+                cp ../../kernel_patches/wild/susfs_fix_patches/v${SUSFS_VERSION}/a14-6.1/base.c.patch ./
+                patch -p1 < base.c.patch || true
+              fi
+              if [[ "$CURRENT_SUB" -le 75 && "${{ inputs.os_patch_level }}" != "2024-05" ]]; then
+                sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+              fi
+            fi
+
+            if [[ "${{ inputs.android_version }}" == "android15" && "${{ inputs.kernel_version }}" == "6.6" ]]; then
+              if [[ "$CURRENT_SUB" -ge 98 ]]; then
+                cp ../../kernel_patches/wild/susfs_fix_patches/v${SUSFS_VERSION}/a15-6.6/base.c.patch ./
+                patch -p1 < base.c.patch || true
+              fi
+              if [[ "$CURRENT_SUB" -le 58 ]]; then
+                cp ../../kernel_patches/wild/susfs_fix_patches/v${SUSFS_VERSION}/a15-6.6/task_mmu.c.patch ./
+                patch -p1 < task_mmu.c.patch || true
+              fi
+            fi
+
+            if [[ "${{ inputs.android_version }}" == "android16" && "${{ inputs.kernel_version }}" == "6.12" ]]; then
+              echo "android16-6.12: 暂无需要修复的内容"
+            fi
+          fi
+
           # if [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
           #   cp ../../zzh_patch/rm_devpt.patch ./
           #   patch -p1 < rm_devpt.patch
@@ -459,7 +558,7 @@ jobs:
           fi
   
       - name: 一些修复补丁
-        if: ${{ !inputs.cancel_susfs }}
+        if: ${{ !inputs.cancel_susfs && inputs.kernelsu_variant != 'Next' }}
         run: |
           cd "$CONFIG/common"
           FORMATTED_BRANCH="${{ inputs.android_version }}-${{ inputs.kernel_version }}"

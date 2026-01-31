@@ -1,0 +1,53 @@
+# Claude Code
+.claude/
+
+# IDE & Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Build outputs
+*.o
+*.ko
+*.mod.c
+*.mod
+*.cmd
+*.order
+*.symvers
+*.tmp
+*.log
+
+# Kernel build artifacts
+out/
+Image
+Image.gz
+Image.lz4
+*.img
+*.zip
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Node.js (if any tooling)
+node_modules/
