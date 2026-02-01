@@ -458,7 +458,9 @@ jobs:
 
             # Android 12 - 5.10 修复
             if [[ "${{ inputs.android_version }}" == "android12" && "${{ inputs.kernel_version }}" == "5.10" ]]; then
-              [[ "$CURRENT_SUB" -le 137 ]] && { curl -LSs "https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/tmp-use/5.10-patch/fdinfo.c.patch" -o fdinfo.c.patch; patch -p1 < fdinfo.c.patch || true; }
+              [[ "$CURRENT_SUB" -le 209 ]] && sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+              [[ "$CURRENT_SUB" -le 117 ]] && { cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/fdinfo.c.patch ./; patch -p1 < fdinfo.c.patch || true; }
+              [[ "$CURRENT_SUB" -le 43 ]] && { cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/base.c.patch ./; patch -p1 < base.c.patch || true; }
             fi
 
 

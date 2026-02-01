@@ -57,17 +57,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ==================== 处理 Normal 类型 ====================
-      - name: 处理 Normal 类型
+      - name: 处理 Normal 类型 - 标记正常
         if: inputs.issue_type == 'Normal'
         run: |
           cat > new_body.md << 'EOF'
-          > [!NOTE]
-          > **此版本有已知问题，请留意。**
+          > [!TIP]
+          > **此版本已验证，可正常使用。**
           >
-          > **This release has known issues, please be aware.**
+          > **This release has been verified and is safe to use.**
           EOF
 
-          # 移除 heredoc 产生的前导空格
           sed -i 's/^          //' new_body.md
 
           if [ -n "${{ inputs.reference }}" ]; then
@@ -83,7 +82,7 @@ jobs:
           gh release edit "${{ inputs.target_tag }}" --repo ${{ github.repository }} \
             --notes-file new_body.md
 
-          echo "✅ 已更新 Release 说明 (Normal)"
+          echo "✅ 已标记 Release 为正常 (Normal)"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
