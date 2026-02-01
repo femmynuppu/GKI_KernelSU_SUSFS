@@ -61,11 +61,14 @@ jobs:
         if: inputs.issue_type == 'Normal'
         run: |
           cat > new_body.md << 'EOF'
-> [!NOTE]
-> **此版本有已知问题，请留意。**
->
-> **This release has known issues, please be aware.**
-EOF
+          > [!NOTE]
+          > **此版本有已知问题，请留意。**
+          >
+          > **This release has known issues, please be aware.**
+          EOF
+
+          # 移除 heredoc 产生的前导空格
+          sed -i 's/^          //' new_body.md
 
           if [ -n "${{ inputs.reference }}" ]; then
             echo "" >> new_body.md
@@ -89,11 +92,13 @@ EOF
         if: inputs.issue_type == 'Bug'
         run: |
           cat > new_body.md << 'EOF'
-> [!WARNING]
-> **此版本存在已知 Bug，建议谨慎使用。**
->
-> **This release contains known bugs, use with caution.**
-EOF
+          > [!WARNING]
+          > **此版本存在已知 Bug，建议谨慎使用。**
+          >
+          > **This release contains known bugs, use with caution.**
+          EOF
+
+          sed -i 's/^          //' new_body.md
 
           if [ -n "${{ inputs.reference }}" ]; then
             echo "" >> new_body.md
@@ -120,15 +125,17 @@ EOF
 
           # 构建警告信息
           cat > new_body.md << 'EOF'
-> [!CAUTION]
-> **本次发布的资源包含导致死机的严重 Bug，所有附件已被清除！**
->
-> **请勿使用此版本，等待修复版本发布。**
->
-> **This release contained a critical bug causing device crashes. All assets have been removed!**
->
-> **DO NOT use this version. Please wait for a fixed release.**
-EOF
+          > [!CAUTION]
+          > **本次发布的资源包含导致死机的严重 Bug，所有附件已被清除！**
+          >
+          > **请勿使用此版本，等待修复版本发布。**
+          >
+          > **This release contained a critical bug causing device crashes. All assets have been removed!**
+          >
+          > **DO NOT use this version. Please wait for a fixed release.**
+          EOF
+
+          sed -i 's/^          //' new_body.md
 
           if [ -n "${{ inputs.reference }}" ]; then
             echo "" >> new_body.md
