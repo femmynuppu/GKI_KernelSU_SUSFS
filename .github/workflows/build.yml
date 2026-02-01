@@ -463,7 +463,7 @@ jobs:
             fi
           fi
 
-          patch -p1 --fuzz=3 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+          patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
 
           # Revert Fake Patch：删除预先添加的行（SUSFS 补丁会添加自己的）
           if [ "$FAKE_PATCHED" = 1 ]; then
