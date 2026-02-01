@@ -10,6 +10,11 @@
 
 name: 构建内核
 
+# 并发控制：同一分支只运行一个实例，新运行会取消旧的
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
   actions: write
@@ -172,7 +177,7 @@ jobs:
   # ==================== 收集补丁冲突文件 ====================
   # 汇总所有构建任务中的 .rej 文件，方便调试补丁问题
   collect-rejects:
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     needs:
       - build-a12-5-10
@@ -209,8 +214,9 @@ jobs:
 
   # ==================== 创建发布 ====================
   # 当 release_type 不是 Actions 时，创建 GitHub Release
+  # 仅限原仓库运行，fork 仓库跳过此步骤
   release:
-    if: always() && inputs.release_type != 'Actions'
+    if: ${{ always() && !cancelled() && inputs.release_type != 'Actions' && github.repository == 'zzh20188/GKI_KernelSU_SUSFS' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -224,29 +230,62 @@ jobs:
 
     # ==================== 环境变量 ====================
     env:
-      REPO_OWNER: zzh20188
-      REPO_NAME: GKI_KernelSU_SUSFS
+      REPO_OWNER: ${{ github.repository_owner }}
+      REPO_NAME: ${{ github.event.repository.name }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # 发布标题
-      RELEASE_NAME: "GKI内核: ${{ inputs.kernelsu_variant == 'Next' && 'KernelSU-' || '' }}${{ inputs.kernelsu_variant }}(${{ needs.get-manager.outputs.ksuVer }}) & SUSFS ${{ needs.get-manager.outputs.susVer }}"
-      # 发布说明
-      RELEASE_NOTES: |
-        此处包含：**${{ inputs.kernelsu_variant == 'Next' && 'KernelSU-' || '' }}${{ inputs.kernelsu_variant }}**、SUSFS ${{ needs.get-manager.outputs.susVer }} ${{ inputs.use_zram && '、LZ4KD' || '' }}
-
-        功能:
-        -> ${{ inputs.kernelsu_variant == 'Next' && 'KernelSU-' || '' }}${{ inputs.kernelsu_variant }}${{ inputs.kernelsu_variant == 'Official' && '原版' || '' }}${{ inputs.kernelsu_branch == 'Dev(开发)' && format('({0})', needs.get-manager.outputs.ksuVer) || '稳定版' }}
-        -> SUSFS ඞ ${{ needs.get-manager.outputs.susVer }}
-        ${{ inputs.kernelsu_variant != 'SukiSU' && '-> KPROBE Hooks' || '-> SUSFS Inline Hooks' }}
-        ${{ inputs.kernelsu_variant != 'Official' && '-> Magic Mount 支持' || '-> OVERLAYFS 支持' }}
-        -> BBG安全补丁 ${{ inputs.use_bbg && '支持' || '不支持' }}
-        ${{ inputs.use_kpm && '-> KPM 支持' || '' }} | 若不支持可[手动修补](https://github.com/zzh20188/GKI_KernelSU_SUSFS/issues/132)
-        -> **LZ4KD&ONEPLUS_LZ4K** ${{ inputs.use_zram && '开启' || '未开启' }}
-        -> lz4: v1.10.0 ${{ inputs.use_zram && '开启' || '未开启' }}
-        -> [Unicode零宽绕过修复与内存优化](https://t.me/real5ec1cff/268) 请直接使用Xp模块
-        模块:
-        -> https://github.com/sidex15/ksu_module_susfs
 
     steps:
+      # ==================== 设置显示名称 ====================
+      # 预计算各种显示名称，简化后续引用
+      - name: 设置显示名称
+        run: |
+          # KSU 显示名称
+          case "${{ inputs.kernelsu_variant }}" in
+            "Next")     KSU_NAME="KernelSU-Next" ;;
+            "Official") KSU_NAME="KernelSU" ;;
+            "MKSU")     KSU_NAME="MKSU" ;;
+            "SukiSU")   KSU_NAME="SukiSU" ;;
+          esac
+          echo "KSU_NAME=$KSU_NAME" >> $GITHUB_ENV
+
+          # 版本信息
+          KSU_VER="${{ needs.get-manager.outputs.ksuVer }}"
+          SUS_VER="${{ needs.get-manager.outputs.susVer }}"
+          echo "KSU_VER=$KSU_VER" >> $GITHUB_ENV
+          echo "SUS_VER=$SUS_VER" >> $GITHUB_ENV
+
+          # 功能开关显示
+          echo "LZ4_STATUS=${{ inputs.use_zram && '开启' || '未开启' }}" >> $GITHUB_ENV
+          echo "BBG_STATUS=${{ inputs.use_bbg && '支持' || '不支持' }}" >> $GITHUB_ENV
+          echo "KPM_LINE=${{ inputs.use_kpm && '-> KPM 支持' || '' }}" >> $GITHUB_ENV
+          echo "LZ4_SUFFIX=${{ inputs.use_zram && '、LZ4KD' || '' }}" >> $GITHUB_ENV
+
+          # Hook 类型
+          if [ "${{ inputs.kernelsu_variant }}" = "SukiSU" ]; then
+            echo "HOOK_TYPE=-> SUSFS Inline Hooks" >> $GITHUB_ENV
+          else
+            echo "HOOK_TYPE=-> KPROBE Hooks" >> $GITHUB_ENV
+          fi
+
+          # Mount 类型
+          if [ "${{ inputs.kernelsu_variant }}" = "Official" ]; then
+            echo "MOUNT_TYPE=-> OVERLAYFS 支持" >> $GITHUB_ENV
+            echo "KSU_SUFFIX=原版" >> $GITHUB_ENV
+          else
+            echo "MOUNT_TYPE=-> Magic Mount 支持" >> $GITHUB_ENV
+            echo "KSU_SUFFIX=" >> $GITHUB_ENV
+          fi
+
+          # 分支显示
+          if [ "${{ inputs.kernelsu_branch }}" = "Dev(开发)" ]; then
+            echo "BRANCH_INFO=($KSU_VER)" >> $GITHUB_ENV
+          else
+            echo "BRANCH_INFO=稳定版" >> $GITHUB_ENV
+          fi
+
+          # 发布标题
+          echo "RELEASE_NAME=GKI内核: ${KSU_NAME}(${KSU_VER}) & SUSFS ${SUS_VER}" >> $GITHUB_ENV
+
       # ==================== 验证构建状态 ====================
       # 确保所有选中的构建任务都成功完成
       - name: 验证构建状态
@@ -332,8 +371,21 @@ jobs:
       # 创建包含详细信息的发布说明文档
       - name: 生成发布说明
         run: |
-          cat > release_body.md << 'EOFNOTES'
-          ${{ env.RELEASE_NOTES }}
+          cat > release_body.md << EOF
+          此处包含：**${{ env.KSU_NAME }}**、SUSFS ${{ env.SUS_VER }}${{ env.LZ4_SUFFIX }}
+
+          功能:
+          -> ${{ env.KSU_NAME }}${{ env.KSU_SUFFIX }}${{ env.BRANCH_INFO }}
+          -> SUSFS ඞ ${{ env.SUS_VER }}
+          ${{ env.HOOK_TYPE }}
+          ${{ env.MOUNT_TYPE }}
+          -> BBG安全补丁 ${{ env.BBG_STATUS }}
+          ${{ env.KPM_LINE }} | 若不支持可[手动修补](https://github.com/zzh20188/GKI_KernelSU_SUSFS/issues/132)
+          -> **LZ4KD&ONEPLUS_LZ4K** ${{ env.LZ4_STATUS }}
+          -> lz4: v1.10.0 ${{ env.LZ4_STATUS }}
+          -> [Unicode零宽绕过修复与内存优化](https://t.me/real5ec1cff/268) 请直接使用Xp模块
+          模块:
+          -> https://github.com/sidex15/ksu_module_susfs
 
           ---
 
@@ -354,7 +406,7 @@ jobs:
           LTO: thin
 
           点击下方 **【Assets】** 展开资源
-          EOFNOTES
+          EOF
 
       # ==================== 生成版本标签 ====================
       # 根据 SUSFS 版本生成递增的发布标签
