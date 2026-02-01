@@ -73,6 +73,11 @@ on:
       cancel_susfs:
         required: false
         type: boolean
+      called_from_main:
+        description: "是否从 main.yml 调用（内部使用）"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-kernels-a14-6-1:
@@ -117,8 +122,9 @@ jobs:
       supp_op: false
       enable_susfs: ${{ !inputs.cancel_susfs }}
 
+  # 仅在直接触发时运行，从 main.yml 调用时跳过
   get-ksu-manager:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ !inputs.called_from_main }}
     uses: ./.github/workflows/get-manager.yml
     secrets: inherit
     with:

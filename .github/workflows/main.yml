@@ -118,6 +118,7 @@ jobs:
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
+      called_from_main: true
 
   # ==================== Android 13 - 5.15 构建 ====================
   build-a13-5-15:
@@ -132,6 +133,7 @@ jobs:
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
+      called_from_main: true
 
   # ==================== Android 14 - 6.1 构建 ====================
   build-a14-6-1:
@@ -146,6 +148,7 @@ jobs:
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
+      called_from_main: true
 
   # ==================== Android 15 - 6.6 构建 ====================
   build-a15-6-6:
@@ -160,6 +163,7 @@ jobs:
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
+      called_from_main: true
 
   # ==================== 收集补丁冲突文件 ====================
   # 汇总所有构建任务中的 .rej 文件，方便调试补丁问题
