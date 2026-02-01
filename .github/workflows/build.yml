@@ -78,11 +78,6 @@ on:
         required: false
         type: boolean
         default: false
-      only_ak3:
-        description: "仅上传 AnyKernel3 压缩包"
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   build-kernel:
@@ -181,11 +176,12 @@ jobs:
           fi
 
       # ==================== 安装编译依赖 ====================
-      # 安装内核编译所需的各种工具和库
+      # 安装内核编译所需的各种工具和库（使用 apt 缓存加速）
       - name: 安装编译依赖
-        run: |
-          sudo apt update && sudo apt upgrade -y
-          sudo apt install -y ccache python3 git curl build-essential libssl-dev bison flex libelf-dev dwarves
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: ccache python3 git curl build-essential libssl-dev bison flex libelf-dev dwarves
+          execute_install_scripts: true
 
       # ==================== 配置 ccache ====================
       # ccache 用于缓存编译结果，加速后续构建
@@ -467,11 +463,6 @@ jobs:
               [[ "$CURRENT_SUB" -le 43 ]] && { cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/base.c.patch ./; patch -p1 < base.c.patch || true; }
             fi
 
-            # Android 13 - 5.10 修复
-            if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.10" ]]; then
-              [[ "$CURRENT_SUB" -le 107 ]] && { cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.10/fdinfo.c.patch ./; patch -p1 < fdinfo.c.patch || true; }
-              [[ "$CURRENT_SUB" -le 209 && "${{ inputs.os_patch_level }}" != "2024-05" ]] && sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
-            fi
 
             # Android 13 - 5.15 修复
             if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.15" ]]; then
@@ -772,7 +763,6 @@ jobs:
 
       # ==================== 创建 AnyKernel3 压缩包 ====================
       - name: 创建 AnyKernel3 压缩包
-        if: ${{ !inputs.only_ak3 }}
         run: |
           cd $ANYKERNEL3
           ZIP_NAME="${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-AnyKernel3.zip"
@@ -866,24 +856,14 @@ jobs:
             done
           fi
 
-      # ==================== 上传构建产物 (完整包) ====================
-      - name: 上传构建产物 (完整包)
-        if: "!inputs.only_ak3"
+      # ==================== 上传构建产物 ====================
+      - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}
           path: |
             *AnyKernel3.zip
             *.img
-          compression-level: 9
-
-      # ==================== 上传构建产物 (仅 AK3) ====================
-      - name: 上传构建产物 (仅 AK3)
-        if: inputs.only_ak3
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}-Anykernel3
-          path: ./AnyKernel3/*
           compression-level: 9
 
       # ==================== 上传补丁冲突文件 ====================
