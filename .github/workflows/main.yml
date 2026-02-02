@@ -379,7 +379,7 @@ jobs:
 
           ${{ env.HOOK_TYPE }}
           ${{ env.MOUNT_TYPE }}
-          ${{ env.KPM_LINE }} | 若不支持可[手动修补](https://github.com/zzh20188/GKI_KernelSU_SUSFS/issues/132)
+          ${{ env.KPM_LINE }} 
 
           > 💡 [Unicode 零宽绕过修复](https://t.me/real5ec1cff/268) - 请使用 Xposed 模块
 
