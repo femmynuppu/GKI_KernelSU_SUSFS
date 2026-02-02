@@ -512,6 +512,8 @@ jobs:
         run: |
           for file in ./downloaded-artifacts/*_kernel-*/*; do
             [ -d "$file" ] && continue
+            # 跳过 -Rejects 目录中的文件（已在 collect-rejects 中汇总处理）
+            [[ "$file" == *-Rejects/* ]] && continue
             echo "上传 $file..."
             gh release upload "$NEW_TAG" "$file"
           done
