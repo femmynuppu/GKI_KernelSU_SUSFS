@@ -380,7 +380,7 @@ jobs:
               ;;
             "Next")
               echo "添加 KernelSU-Next..."
-              curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash $BRANCH
+              curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/dev/kernel/setup.sh" | bash -s dev_susfs
               ;;
             "MKSU")
               echo "添加 MKSU..."
@@ -423,23 +423,8 @@ jobs:
               cp $SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
               patch -p1 --forward < 10_enable_susfs_for_ksu.patch || true
               ;;
-            "Next")
-              cd ./KernelSU-Next
-              cp $SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
-              patch -p1 < 10_enable_susfs_for_ksu.patch || true
-
-              # 应用 Next 版本专用修复补丁
-              cp "$KERNEL_PATCHES/next/susfs_fix_patches/v${SUSFS_VERSION}/"*.patch ./
-              for patch_file in fix_Makefile.patch fix_allowlist.c.patch fix_apk_sign.c.patch \
-                               fix_kernel_umount.c.patch fix_ksu.c.patch fix_ksud.c.patch \
-                               fix_selinux.c.patch fix_setuid_hook.c.patch fix_sucompat.c.patch \
-                               fix_supercalls.c.patch overwrite_hook_mode.patch ksu_toolkit.patch; do
-                echo "应用 $patch_file..."
-                patch -p1 < "$patch_file" || true
-              done
-              ;;
-            "SukiSU"|"ReSukiSU")
-              echo "SukiSU/ReSukiSU 使用内置 SUSFS 支持"
+            "Next"|"SukiSU"|"ReSukiSU")
+              echo "Next/SukiSU/ReSukiSU 使用内置 SUSFS 支持"
               ;;
           esac
 
@@ -659,7 +644,7 @@ jobs:
           CONFIG_TMPFS_POSIX_ACL=y
           EOF
 
-          if [ "${{ inputs.ksu_variant }}" == "SukiSU" ] || [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ]; then
+          if [ "${{ inputs.ksu_variant }}" == "SukiSU" ] || [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ] || [ "${{ inputs.ksu_variant }}" == "Next" ]; then
             echo "CONFIG_KPM=y" >> "$DEFCONFIG"
           fi
 
@@ -743,8 +728,8 @@ jobs:
 
       # ==================== KPM 补丁 (仅 SukiSU) ====================
       # 为 SukiSU 应用 KPM (Kernel Patch Module) 补丁
-      - name: 应用 KPM 补丁 (仅 SukiSU/ReSukiSU)
-        if: inputs.use_kpm && (inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'ReSukiSU')
+      - name: 应用 KPM 补丁 (SukiSU/ReSukiSU/Next)
+        if: inputs.use_kpm && (inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'ReSukiSU' || inputs.ksu_variant == 'Next')
         run: |
           case "${{ inputs.android_version }}" in
             "android12"|"android13")

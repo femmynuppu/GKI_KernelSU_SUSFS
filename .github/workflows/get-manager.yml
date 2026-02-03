@@ -121,6 +121,7 @@ jobs:
             echo "KernelSU Next..."
             REPO="KernelSU-Next/KernelSU-Next"
             KSUM="manager"
+            BRANCH="dev"
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             echo "SukiSU..."
             REPO="SukiSU-Ultra/SukiSU-Ultra"
@@ -158,23 +159,40 @@ jobs:
 
             # 1. 获取指定顺序的成功构建的ID
 
-            BUILD_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/$REPO/actions/workflows/$FILENAME/runs?status=success" |
-              jq -r '.workflow_runs['"$NUMBER"'].id')
+            # 对于 Next 变体，添加 branch 参数过滤
+            if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
+              BUILD_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/repos/$REPO/actions/workflows/$FILENAME/runs?branch=$BRANCH&status=success&per_page=1" |
+                jq -r '.workflow_runs[0].id')
+            else
+              BUILD_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/repos/$REPO/actions/workflows/$FILENAME/runs?status=success" |
+                jq -r '.workflow_runs['"$NUMBER"'].id')
+            fi
 
             echo "找到构建 ID: $BUILD_ID"
 
             ARTIFACTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/$REPO/actions/runs/$BUILD_ID/artifacts")
 
-            result=$(echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.name | contains("'"$KSUM"'")) | .name')
+            # 对于 Next 变体使用精确匹配，其他变体使用模糊匹配
+            if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
+              result=$(echo "$ARTIFACTS" | jq -r ".artifacts[] | select(.name == \"$KSUM\") | .name")
+            else
+              result=$(echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.name | contains("'"$KSUM"'")) | .name')
+            fi
 
             if [ -z "$result" ]; then
               echo "没有找到包含 '$KSUM' 的项"
               NUMBER=$((NUMBER + 1))
             else
               echo "$result"
-              DOWNLOAD_LIST=$(echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.name | contains("'"$KSUM"'")) | "\(.name)\t\(.archive_download_url)"')
+              # 对于 Next 变体使用精确匹配，其他变体使用模糊匹配
+              if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
+                DOWNLOAD_LIST=$(echo "$ARTIFACTS" | jq -r ".artifacts[] | select(.name == \"$KSUM\") | \"\(.name)\t\(.archive_download_url)\"")
+              else
+                DOWNLOAD_LIST=$(echo "$ARTIFACTS" | jq -r '.artifacts[] | select(.name | contains("'"$KSUM"'")) | "\(.name)\t\(.archive_download_url)"')
+              fi
               break
             fi
 
