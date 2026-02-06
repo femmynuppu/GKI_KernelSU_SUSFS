@@ -710,9 +710,12 @@ jobs:
           max_attempts: 3
           retry_on: timeout
           command: |
+            echo "::group::构建说明"
             echo "一般情况下不会出错，除非KSU仓库和SUSFS仓库代码不同。"
             echo "不要问，不要急，这跟你怎么努力，或者跟我反馈没关系，因为这跟我无关。"
             echo "等待适配即可，你有能力则自己去SUKISU仓库提交代码，"
+            echo "::endgroup::"
+            
 
             set -ex
             cd "$KERNEL_ROOT"
@@ -730,10 +733,12 @@ jobs:
               strings ./bazel-bin/common/kernel_aarch64/Image | grep 'Linux version'
             fi
 
+            echo "::group::构建说明"
             echo "一般情况下不会出错，除非KSU仓库和SUSFS仓库代码不同。"
             echo "不要问，不要急，这跟你怎么努力，或者跟我反馈没关系，因为这跟我无关。"
             echo "等待适配即可，你有能力则自己去SUKISU仓库提交代码，"
-            
+            echo "::endgroup::"
+
       # ==================== KPM 补丁 (仅 SukiSU) ====================
       # 为 SukiSU 应用 KPM (Kernel Patch Module) 补丁
       - name: 应用 KPM 补丁 (SukiSU/ReSukiSU/Next)
