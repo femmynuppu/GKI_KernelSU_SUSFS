@@ -703,13 +703,17 @@ jobs:
 
       # ==================== 编译内核 ====================
       # 使用重试机制编译内核，超时后自动重试
-      - name: 编译内核
+      - name: 构建——如出错为该KSU暂时未同步SUSFS代码或编译时错误(等待该KSU仓库修复)
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 30
           max_attempts: 3
           retry_on: timeout
           command: |
+            echo "一般情况下不会出错，除非KSU仓库和SUSFS仓库代码不同。"
+            echo "不要问，不要急，这跟你怎么努力，或者跟我反馈没关系，因为这跟我无关。"
+            echo "等待适配即可，你有能力则自己去SUKISU仓库提交代码，"
+
             set -ex
             cd "$KERNEL_ROOT"
 
@@ -726,6 +730,10 @@ jobs:
               strings ./bazel-bin/common/kernel_aarch64/Image | grep 'Linux version'
             fi
 
+            echo "一般情况下不会出错，除非KSU仓库和SUSFS仓库代码不同。"
+            echo "不要问，不要急，这跟你怎么努力，或者跟我反馈没关系，因为这跟我无关。"
+            echo "等待适配即可，你有能力则自己去SUKISU仓库提交代码，"
+            
       # ==================== KPM 补丁 (仅 SukiSU) ====================
       # 为 SukiSU 应用 KPM (Kernel Patch Module) 补丁
       - name: 应用 KPM 补丁 (SukiSU/ReSukiSU/Next)
