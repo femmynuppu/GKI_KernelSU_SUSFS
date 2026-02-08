@@ -102,7 +102,12 @@ Wiki 涵盖内容：
 **如何获取提交哈希？**
 
 - SUSFS: https://gitlab.com/simonpunk/susfs4ksu
-- SukiSU: https://github.com/SukiSU-Ultra/SukiSU-Ultra
+- SukiSU: https://github.com/SukiSU-Ultra/SukiSU-Ultra/commits/builtin/
+
+以 SUSFS 为例，先选择分支，再复制对应提交的哈希值：
+
+![选择分支](assets/susfs_branch.png)
+![复制提交](assets/susfs_commit.png)
 
 ```ini
 # 启用自定义提交
