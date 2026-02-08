@@ -39,7 +39,7 @@ on:
         type: string
         default: "2022-01"
       revision:
-        description: "修订版本 (如 r11, 仅 Android 12 需要)"
+        description: "修订版本 (如 r11, 仅 5.10 需要)"
         required: false
         type: string
         default: "r11"
