@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       kernelsu_variant:
-        description: "选择 KernelSU"
+        description: "KernelSU 变体"
         required: true
         type: choice
         options:
@@ -19,7 +19,7 @@ on:
           - ReSukiSU
         default: SukiSU
       kernelsu_branch:
-        description: "选择 ksu 分支"
+        description: "KSU 分支"
         required: true
         type: choice
         options:
@@ -28,31 +28,31 @@ on:
           - Other(其他/指定)
         default: Stable(标准)
       version:
-        description: '自定义版本名(如位于6.6.77-android15-8<自定义版本名>/留空则使用默认版本号)'
+        description: "自定义版本名 (可选)"
         required: false
         type: string
       use_zram:
-        description: '是否开启增加更多ZRAM算法?'
+        description: "启用 ZRAM 增强算法"
         required: true
         type: boolean
         default: true
       use_bbg:
-        description: '是否开启BBG防格机补丁?（报错请关闭）'
+        description: "启用 BBG 防格机"
         required: true
         type: boolean
         default: true
       use_kpm:
-        description: '是否开启KPM功能?'
+        description: "启用 KPM 功能"
         required: true
         type: boolean
         default: true
       cancel_susfs:
-        description: '取消susfs'
+        description: "禁用 SUSFS"
         required: true
         type: boolean
         default: false
       supp_op:
-        description: '是否开启一加8E处理器机型支持?(非该机型无须勾)'
+        description: "启用一加 8E 支持"
         required: false
         type: boolean
         default: false
