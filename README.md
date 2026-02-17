@@ -1,6 +1,7 @@
 <div align="center">
 
 # GKI KernelSU SUSFS
+# 🏮 2026 🐎 Happy New Year! 🏮
 
 **自动化构建 GKI 内核 | 集成 KernelSU + SUSFS**
 
@@ -49,16 +50,6 @@
 
 > **注意：** 目前不支持一加 ColorOS 14、15，刷入后可能需要清除数据开机。
 
----
-
-## ✨ 特色版本
-
-| 版本 | 说明 | 下载链接 |
-|:---:|:---|:---:|
-| **hymo+gki** | 集成 [hymo 挂载元模块](https://github.com/Anatdx/hymo)（仅支持 6.6） | [Release v2.0.0-r24](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r24) |
-| **resukisu+gki** | 集成 [ReSukisu](https://github.com/ReSukiSU/ReSukiSU) | [Release v2.0.0-r26](https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/tag/v2.0.0-r26) |
-
-> 💡 预构建版本已支持零宽修复补丁，也可使用 [Unicode零宽修复模块](https://t.me/real5ec1cff/268) (Xposed)
 
 ---
 
@@ -67,13 +58,10 @@
 详细说明请查阅 [**GitHub Wiki（中英双语）**](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki)
 
 Wiki 涵盖内容：
-- 📥 下载与刷写指南
+- 📥 下载/刷入内核
 - 🔄 无限重启处理
-- 🐛 BUG 反馈指引
 - 💡 使用技巧 Tips
-- 📱 KSU 管理器与 SUSFS 模块
-- ⏰ 内核构建时间说明
-- 🆘 紧急救援指南
+- 🆘 救砖指南
 - 📊 内核版本兼容性说明
 - **🔧 [Fork 与自定义编译指南](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki/Fork%E4%B8%8E%E8%87%AA%E5%AE%9A%E4%B9%89%E7%BC%96%E8%AF%91%E6%8C%87%E5%8D%97)** - 学习如何 Fork 仓库并编译自己的内核
 - **🧩 [自定义构建新手指南](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki/%E8%87%AA%E5%AE%9A%E4%B9%89%E6%9E%84%E5%BB%BA%E6%96%B0%E6%89%8B%E6%8C%87%E5%8D%97)** - 面向新手的自定义构建模板
@@ -172,6 +160,11 @@ sukisu=
 |:---:|:---|
 | **FuseFixer** | [Unicode零宽修复模块](https://t.me/real5ec1cff/268) |
 
+### App
+
+| 名称 | 说明 |
+|:---:|:---|
+| **Scene** | [官网](https://omarea.com/#/) |
 ---
 
 <div align="center">
