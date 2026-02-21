@@ -7,7 +7,7 @@
   <script>
     (function () {
       // GoatCounter analytics: replace with your GoatCounter site code.
-      var GOATCOUNTER_SITE = 'REPLACE_WITH_YOUR_GOATCOUNTER_CODE';
+      var GOATCOUNTER_SITE = 'my-gki';
       var isGithubPages = /\.github\.io$/i.test(location.hostname);
       if (!isGithubPages || !GOATCOUNTER_SITE || GOATCOUNTER_SITE.indexOf('REPLACE_WITH_') === 0) {
         return;
@@ -198,6 +198,17 @@
     { android: 'android14', kernel: '6.1',  label: 'android14 / 6.1' },
     { android: 'android15', kernel: '6.6',  label: 'android15 / 6.6' },
   ];
+  const RUNTIME_CACHE_KEY = Date.now().toString(36);
+
+  function withCacheKey(url) {
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + 'v=' + encodeURIComponent(RUNTIME_CACHE_KEY);
+  }
+
+  async function fetchJsonFresh(url) {
+    const r = await fetch(withCacheKey(url), { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
 
   // ---- Apply i18n to static elements ----
   document.getElementById('headerTitle').textContent = t.title;
@@ -240,10 +251,7 @@
   async function loadData() {
     const results = await Promise.allSettled(
       DATA_FILES.map(f =>
-        fetch(`data/${f.android}/${f.kernel}.json`).then(r => {
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          return r.json();
-        })
+        fetchJsonFresh(`data/${f.android}/${f.kernel}.json`)
       )
     );
 
@@ -605,9 +613,7 @@
 
   async function loadAnnouncement() {
     try {
-      const r = await fetch('data/announcement.json');
-      if (!r.ok) return;
-      const json = await r.json();
+      const json = await fetchJsonFresh('data/announcement.json');
       const items = json.items;
       if (!items || items.length === 0) return;
 
