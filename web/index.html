@@ -136,7 +136,7 @@
       copied: 'Copied',
       tcTitle: 'Time Converter',
       tcDate: 'Date',
-      tcTime: 'Time (UTC+8)',
+      tcTime: 'Time (UTC)',
       tcToast: 'Copied to clipboard',
     },
     zh: {
@@ -167,7 +167,7 @@
       copied: '\u5df2\u590d\u5236',
       tcTitle: '\u65f6\u95f4\u8f6c\u6362',
       tcDate: '\u65e5\u671f',
-      tcTime: '\u65f6\u95f4 (UTC+8)',
+      tcTime: '\u65f6\u95f4 (UTC)',
       tcToast: '\u5df2\u590d\u5236\u5230\u526a\u8d34\u677f',
     },
   };
@@ -370,6 +370,91 @@
     return el.innerHTML;
   }
 
+  function renderInlineMarkdown(text) {
+    let html = esc(text == null ? '' : String(text));
+    const codeTokens = [];
+
+    html = html.replace(/`([^`\n]+)`/g, function (_, codeText) {
+      codeTokens.push('<code>' + codeText + '</code>');
+      return '\u0000CODE' + (codeTokens.length - 1) + '\u0000';
+    });
+
+    html = html.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/gi, function (_, label, url) {
+      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
+    });
+    html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+
+    return html.replace(/\u0000CODE(\d+)\u0000/g, function (_, idx) {
+      return codeTokens[Number(idx)] || '';
+    });
+  }
+
+  function renderMarkdown(markdownText) {
+    const normalized = String(markdownText == null ? '' : markdownText)
+      .replace(/\r\n?/g, '\n')
+      .trim();
+    if (!normalized) return '';
+
+    const blocks = normalized.split(/\n{2,}/);
+    const out = [];
+
+    blocks.forEach(function (block) {
+      const lines = block.split('\n');
+      const fence = block.match(/^```([a-zA-Z0-9_-]+)?\n([\s\S]*?)\n```$/);
+      if (fence) {
+        const langClass = fence[1] ? ' class="lang-' + fence[1].toLowerCase() + '"' : '';
+        out.push('<pre><code' + langClass + '>' + esc(fence[2]) + '</code></pre>');
+        return;
+      }
+
+      const heading = block.match(/^\s*(#{1,6})\s+(.+)$/);
+      if (heading && lines.length === 1) {
+        const level = heading[1].length;
+        out.push('<h' + level + '>' + renderInlineMarkdown(heading[2]) + '</h' + level + '>');
+        return;
+      }
+
+      if (lines.every(function (line) { return /^\s*[-*]\s+/.test(line); })) {
+        out.push('<ul>' + lines.map(function (line) {
+          return '<li>' + renderInlineMarkdown(line.replace(/^\s*[-*]\s+/, '')) + '</li>';
+        }).join('') + '</ul>');
+        return;
+      }
+
+      if (lines.every(function (line) { return /^\s*\d+\.\s+/.test(line); })) {
+        out.push('<ol>' + lines.map(function (line) {
+          return '<li>' + renderInlineMarkdown(line.replace(/^\s*\d+\.\s+/, '')) + '</li>';
+        }).join('') + '</ol>');
+        return;
+      }
+
+      if (lines.every(function (line) { return /^\s*>\s?/.test(line); })) {
+        out.push('<blockquote>' + lines.map(function (line) {
+          return renderInlineMarkdown(line.replace(/^\s*>\s?/, ''));
+        }).join('<br>') + '</blockquote>');
+        return;
+      }
+
+      out.push('<p>' + lines.map(renderInlineMarkdown).join('<br>') + '</p>');
+    });
+
+    return out.join('');
+  }
+
+  function normalizeAnnouncementText(value) {
+    if (Array.isArray(value)) return value.join('\n');
+    if (value == null) return '';
+    return String(value);
+  }
+
+  function getAnnouncementText(item) {
+    if (lang === 'zh') {
+      return normalizeAnnouncementText(item.content_zh_md || item.content_zh || item.content_md || item.content);
+    }
+    return normalizeAnnouncementText(item.content_md || item.content || item.content_zh_md || item.content_zh);
+  }
+
   // ---- Modal ----
   const modal = document.getElementById('modal');
   const modalTitle = document.getElementById('modalTitle');
@@ -519,12 +604,17 @@
 
       let html = '';
       items.forEach(function (item) {
-        const text = (lang === 'zh' && item.content_zh) ? item.content_zh : item.content;
-        html += '<div class="announce-item">' +
-          '<span class="announce-date">' + esc(item.date) + '</span>' +
-          '<span class="announce-text">' + esc(text) + '</span>' +
-          '</div>';
+        const text = getAnnouncementText(item);
+        const markdownHtml = renderMarkdown(text);
+        if (!markdownHtml) return;
+
+        const dateText = item.date ? esc(item.date) : '';
+        html += '<article class="announce-item">' +
+          '<div class="announce-text">' + markdownHtml + '</div>' +
+          (dateText ? '<div class="announce-meta"><time class="announce-date" datetime="' + dateText + '">' + dateText + '</time></div>' : '') +
+          '</article>';
       });
+      if (!html) return;
       announceModalBody.innerHTML = html;
       announceModal.style.display = '';
     } catch (e) {
@@ -538,12 +628,11 @@
   const tcResult = document.getElementById('tcResult');
   const tcCopy = document.getElementById('tcCopy');
 
-  // Default to now in UTC+8
+  // Default to now in UTC
   (function initTC() {
     const now = new Date();
-    const utc8 = new Date(now.getTime() + 8 * 3600000);
-    tcDate.value = utc8.toISOString().slice(0, 10);
-    tcTime.value = utc8.toISOString().slice(11, 19);
+    tcDate.value = now.toISOString().slice(0, 10);
+    tcTime.value = now.toISOString().slice(11, 19);
     updateTC();
   })();
 
@@ -551,13 +640,13 @@
     const d = tcDate.value;
     const tm = tcTime.value;
     if (!d || !tm) { tcResult.textContent = '\u2014'; tcCopy.dataset.copy = ''; return; }
-    // Parse as UTC+8, convert to UTC
+    // Parse as UTC directly
     const parts = tm.split(':');
     const h = parseInt(parts[0], 10);
     const m = parseInt(parts[1], 10);
     const s = parseInt(parts[2] || '0', 10);
     const dp = d.split('-');
-    const local = new Date(Date.UTC(parseInt(dp[0]), parseInt(dp[1]) - 1, parseInt(dp[2]), h - 8, m, s));
+    const local = new Date(Date.UTC(parseInt(dp[0]), parseInt(dp[1]) - 1, parseInt(dp[2]), h, m, s));
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const pad = n => String(n).padStart(2, '0');
