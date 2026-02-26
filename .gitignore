@@ -60,3 +60,4 @@ node_modules/
 # Other
 .ace-tool/
 AGENTS.md
+web/serve.sh
