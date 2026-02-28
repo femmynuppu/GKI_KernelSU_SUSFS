@@ -52,7 +52,7 @@
 
 > **注意：** 目前不支持一加 ColorOS 14、15，刷入后可能需要清除数据开机。
 
-> 方向：可能会兼容几个特定的热门机型6.1-6.6机型进行更新，可到issues反馈
+> **ReSukiSU：ReSukiSU更新比SukiSU勤快，SukiSU报错就试试ReSukiSU**
 
 
 ---
