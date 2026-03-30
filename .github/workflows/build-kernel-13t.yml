@@ -1,0 +1,246 @@
+name: Build GKI Kernel (Xiaomi 13T — android13-5.15)
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernelsu_variant:
+        description: 'KernelSU Variant'
+        required: true
+        default: 'SukiSU-Ultra'
+        type: choice
+        options:
+          - SukiSU-Ultra
+      kernel_version:
+        description: 'Kernel version (android13-5.15)'
+        required: true
+        default: 'android13-5.15'
+        type: choice
+        options:
+          - android13-5.15
+      susfs_enabled:
+        description: 'Enable SUSFS'
+        required: true
+        default: true
+        type: boolean
+      kpm_enabled:
+        description: 'Enable KPM support'
+        required: true
+        default: true
+        type: boolean
+      tcp_optimization:
+        description: 'Enable BBR/BBG TCP Optimization'
+        required: true
+        default: true
+        type: boolean
+      zram_optimization:
+        description: 'Enable ZRAM Optimization'
+        required: true
+        default: true
+        type: boolean
+      upload_release:
+        description: 'Upload to GitHub Release'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  build:
+    name: Build Kernel — ${{ inputs.kernel_version }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup build environment
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            git curl wget python3 \
+            libssl-dev libelf-dev \
+            flex bison bc \
+            zip unzip cpio \
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu \
+            lz4
+
+      - name: Setup repo tool
+        run: |
+          mkdir -p ~/.local/bin
+          curl -s https://storage.googleapis.com/git-repo-downloads/repo \
+            -o ~/.local/bin/repo
+          chmod a+x ~/.local/bin/repo
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Read custom commit config
+        id: config
+        run: |
+          if [ -f config/config ]; then
+            source config/config
+          fi
+          echo "susfs_commit=${gki_android13_5_15:-}" >> $GITHUB_OUTPUT
+          echo "sukisu_commit=${sukisu:-}" >> $GITHUB_OUTPUT
+
+      - name: Clone GKI kernel source (android13-5.15)
+        run: |
+          mkdir -p kernel_workspace
+          cd kernel_workspace
+          repo init \
+            -u https://android.googlesource.com/kernel/manifest \
+            -b common-android13-5.15 \
+            --depth=1
+          repo sync -c -j$(nproc) \
+            --no-clone-bundle \
+            --no-tags \
+            --force-sync
+
+      - name: Integrate SukiSU-Ultra
+        run: |
+          cd kernel_workspace/common
+          SUKISU_COMMIT="${{ steps.config.outputs.sukisu_commit }}"
+
+          curl -sSL "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" \
+            -o /tmp/sukisu_setup.sh
+          chmod +x /tmp/sukisu_setup.sh
+
+          if [ -n "$SUKISU_COMMIT" ]; then
+            bash /tmp/sukisu_setup.sh "$SUKISU_COMMIT"
+          else
+            bash /tmp/sukisu_setup.sh main
+          fi
+
+      - name: Apply SUSFS patches (gki-android13-5.15)
+        if: ${{ inputs.susfs_enabled == true }}
+        run: |
+          cd kernel_workspace
+          SUSFS_COMMIT="${{ steps.config.outputs.susfs_commit }}"
+
+          git clone \
+            https://gitlab.com/simonpunk/susfs4ksu.git \
+            -b gki-android13-5.15 \
+            --depth=1 \
+            /tmp/susfs4ksu
+
+          if [ -n "$SUSFS_COMMIT" ]; then
+            git -C /tmp/susfs4ksu checkout "$SUSFS_COMMIT"
+          fi
+
+          # Copy SUSFS files
+          cp /tmp/susfs4ksu/kernel_patches/fs/susfs.c common/fs/
+          cp /tmp/susfs4ksu/kernel_patches/include/linux/susfs.h \
+             common/include/linux/
+
+          # Apply patches
+          cd common
+          for patch in /tmp/susfs4ksu/kernel_patches/*.patch; do
+            echo "Applying: $patch"
+            git apply --check "$patch" 2>/dev/null && \
+              git apply "$patch" || \
+              echo "SKIP (already applied or incompatible): $patch"
+          done
+
+      - name: Enable KPM
+        if: ${{ inputs.kpm_enabled == true }}
+        run: |
+          cd kernel_workspace/common
+          # Enable KPM in KernelSU config
+          echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KPM=y" >> arch/arm64/configs/gki_defconfig || true
+
+      - name: Enable TCP Optimizations (BBR)
+        if: ${{ inputs.tcp_optimization == true }}
+        run: |
+          cd kernel_workspace/common
+          echo "CONFIG_TCP_CONG_BBR=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> arch/arm64/configs/gki_defconfig
+
+      - name: Enable ZRAM Optimizations
+        if: ${{ inputs.zram_optimization == true }}
+        run: |
+          cd kernel_workspace/common
+          # Apply LZ4 NEON optimization script from repo
+          bash ../../zram/apply_lz4_neon.sh
+          # Append ZRAM config from repo
+          cat ../../config/zram.config >> arch/arm64/configs/gki_defconfig
+
+      - name: Apply stock defconfig (if exists)
+        run: |
+          if [ -f config/stock_defconfig ]; then
+            cp config/stock_defconfig \
+               kernel_workspace/common/arch/arm64/configs/stock_defconfig
+            echo "Stock defconfig applied"
+          fi
+
+      - name: Set kernel localversion
+        run: |
+          cd kernel_workspace/common
+          echo "-FemmyFlasher-SukiSU-SUSFS" > localversion
+
+      - name: Build kernel
+        run: |
+          cd kernel_workspace
+          BUILD_CONFIG=common/build.config.gki.aarch64 \
+            build/build.sh \
+            -j$(nproc) \
+            ARCH=arm64 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip
+
+      - name: Package output
+        run: |
+          mkdir -p output
+          # boot.img (GKI format)
+          if [ -f kernel_workspace/out/android13-5.15/dist/boot.img ]; then
+            cp kernel_workspace/out/android13-5.15/dist/boot.img \
+               output/boot-FemmyFlasher-SukiSU-android13-5.15.img
+          fi
+          # Kernel image (untuk AnyKernel3 / manual patch)
+          if [ -f kernel_workspace/out/android13-5.15/dist/Image ]; then
+            cp kernel_workspace/out/android13-5.15/dist/Image \
+               output/Image-android13-5.15
+            # LZ4 compressed (Xiaomi 13T pakai lz4)
+            lz4 -f output/Image-android13-5.15 \
+                output/Image.lz4-android13-5.15 || true
+          fi
+          ls -lah output/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-FemmyFlasher-Xiaomi13T-android13-5.15
+          path: output/
+          retention-days: 7
+
+      - name: Create GitHub Release
+        if: ${{ inputs.upload_release == true }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "kernel-13T-${{ github.run_number }}"
+          name: "GKI Kernel — Xiaomi 13T | SukiSU-Ultra + SUSFS | android13-5.15"
+          body: |
+            ## 📦 Build Info
+            - **Device**: Xiaomi 13T (dimensity 8200-Ultra)
+            - **KernelSU**: SukiSU-Ultra (latest)
+            - **SUSFS**: gki-android13-5.15 (latest)
+            - **KMI**: android13-5.15
+            - **KPM**: ${{ inputs.kpm_enabled }}
+            - **TCP Optimization**: ${{ inputs.tcp_optimization }} (BBR)
+            - **ZRAM Optimization**: ${{ inputs.zram_optimization }}
+            - **Build**: #${{ github.run_number }}
+
+            ## ⚠️ Cara Flash
+            1. Backup boot.img original dulu!
+            2. Flash via `fastboot flash boot boot-*.img`
+            atau patch manual pakai Magisk/APatch kalau mau pertahankan root yang ada
+          files: output/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
