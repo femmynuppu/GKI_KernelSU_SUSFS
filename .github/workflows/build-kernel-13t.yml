@@ -187,6 +187,7 @@ jobs:
       - name: Build kernel
         run: |
           cd kernel_workspace
+          SKIP_DEFCONFIG_CHECK=1 \
           BUILD_CONFIG=common/build.config.gki.aarch64 \
             build/build.sh \
             -j$(nproc) \
