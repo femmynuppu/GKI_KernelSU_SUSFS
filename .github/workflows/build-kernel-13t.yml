@@ -78,10 +78,11 @@ jobs:
         id: config
         run: |
           if [ -f config/config ]; then
-            source config/config
+            SUSFS_COMMIT=$(grep "^gki-android12-5.10=" config/config | cut -d'=' -f2)
+            SUKISU_COMMIT=$(grep "^sukisu=" config/config | cut -d'=' -f2)
+            echo "susfs_commit=${SUSFS_COMMIT}" >> $GITHUB_OUTPUT
+            echo "sukisu_commit=${SUKISU_COMMIT}" >> $GITHUB_OUTPUT
           fi
-          echo "susfs_commit=${gki_android12_5_10:-}" >> $GITHUB_OUTPUT
-          echo "sukisu_commit=${sukisu:-}" >> $GITHUB_OUTPUT
 
       - name: Clone GKI kernel source (android12-5.10)
         run: |
