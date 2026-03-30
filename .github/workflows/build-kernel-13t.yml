@@ -1,4 +1,4 @@
-name: Build GKI Kernel (Xiaomi 13T — android13-5.15)
+name: Build GKI Kernel (Xiaomi 13T — android12-5.10)
 
 on:
   workflow_dispatch:
@@ -11,12 +11,12 @@ on:
         options:
           - SukiSU-Ultra
       kernel_version:
-        description: 'Kernel version (android13-5.15)'
+        description: 'Kernel version (android12-5.10)'
         required: true
-        default: 'android13-5.15'
+        default: 'android12-5.10'
         type: choice
         options:
-          - android13-5.15
+          - android12-5.10
       susfs_enabled:
         description: 'Enable SUSFS'
         required: true
@@ -80,16 +80,17 @@ jobs:
           if [ -f config/config ]; then
             source config/config
           fi
-          echo "susfs_commit=${gki_android13_5_15:-}" >> $GITHUB_OUTPUT
+          echo "susfs_commit=${gki_android12_5_10:-}" >> $GITHUB_OUTPUT
           echo "sukisu_commit=${sukisu:-}" >> $GITHUB_OUTPUT
 
-      - name: Clone GKI kernel source (android13-5.15)
+      - name: Clone GKI kernel source (android12-5.10)
         run: |
           mkdir -p kernel_workspace
           cd kernel_workspace
+          # Syncing targeting android12-5.10-2023-11 for 5.10.198 match
           repo init \
             -u https://android.googlesource.com/kernel/manifest \
-            -b common-android13-5.15 \
+            -b common-android12-5.10-2023-11 \
             --depth=1
           repo sync -c -j$(nproc) \
             --no-clone-bundle \
@@ -111,7 +112,7 @@ jobs:
             bash /tmp/sukisu_setup.sh main
           fi
 
-      - name: Apply SUSFS patches (gki-android13-5.15)
+      - name: Apply SUSFS patches (gki-android12-5.10)
         if: ${{ inputs.susfs_enabled == true }}
         run: |
           cd kernel_workspace
@@ -119,7 +120,7 @@ jobs:
 
           git clone \
             https://gitlab.com/simonpunk/susfs4ksu.git \
-            -b gki-android13-5.15 \
+            -b gki-android12-5.10 \
             --depth=1 \
             /tmp/susfs4ksu
 
@@ -173,14 +174,20 @@ jobs:
             echo "Stock defconfig applied"
           fi
 
-      - name: Set kernel localversion
+      - name: Set kernel version and localversion (Matching user's kernel)
         run: |
           cd kernel_workspace/common
-          echo "-FemmyFlasher-SukiSU-SUSFS" > localversion
+          # Force SUBLEVEL to 198
+          sed -i 's/^SUBLEVEL = .*/SUBLEVEL = 198/' Makefile
+          # Set exact LOCALVERSION to match user's string
+          echo "-android12-9-00085-g226a9632f13d-ab11136126" > localversion
+          # Disable LOCALVERSION_AUTO to avoid + sign
+          echo "CONFIG_LOCALVERSION_AUTO=n" >> arch/arm64/configs/gki_defconfig
 
       - name: Build kernel
         run: |
           cd kernel_workspace
+          # For 5.10, we often need LLVM/Clang from AOSP or use build.sh
           BUILD_CONFIG=common/build.config.gki.aarch64 \
             build/build.sh \
             -j$(nproc) \
@@ -197,24 +204,24 @@ jobs:
         run: |
           mkdir -p output
           # boot.img (GKI format)
-          if [ -f kernel_workspace/out/android13-5.15/dist/boot.img ]; then
-            cp kernel_workspace/out/android13-5.15/dist/boot.img \
-               output/boot-FemmyFlasher-SukiSU-android13-5.15.img
+          if [ -f kernel_workspace/out/android12-5.10/dist/boot.img ]; then
+            cp kernel_workspace/out/android12-5.10/dist/boot.img \
+               output/boot-FemmyFlasher-SukiSU-android12-5.10.img
           fi
           # Kernel image (untuk AnyKernel3 / manual patch)
-          if [ -f kernel_workspace/out/android13-5.15/dist/Image ]; then
-            cp kernel_workspace/out/android13-5.15/dist/Image \
-               output/Image-android13-5.15
+          if [ -f kernel_workspace/out/android12-5.10/dist/Image ]; then
+            cp kernel_workspace/out/android12-5.10/dist/Image \
+               output/Image-android12-5.10
             # LZ4 compressed (Xiaomi 13T pakai lz4)
-            lz4 -f output/Image-android13-5.15 \
-                output/Image.lz4-android13-5.15 || true
+            lz4 -f output/Image-android12-5.10 \
+                output/Image.lz4-android12-5.10 || true
           fi
           ls -lah output/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-FemmyFlasher-Xiaomi13T-android13-5.15
+          name: kernel-FemmyFlasher-Xiaomi13T-android12-5.10
           path: output/
           retention-days: 7
 
@@ -222,14 +229,15 @@ jobs:
         if: ${{ inputs.upload_release == true }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "kernel-13T-${{ github.run_number }}"
-          name: "GKI Kernel — Xiaomi 13T | SukiSU-Ultra + SUSFS | android13-5.15"
+          tag_name: "kernel-13T-A12-${{ github.run_number }}"
+          name: "GKI Kernel — Xiaomi 13T | SukiSU-Ultra + SUSFS | android12-5.10"
           body: |
             ## 📦 Build Info
             - **Device**: Xiaomi 13T (dimensity 8200-Ultra)
             - **KernelSU**: SukiSU-Ultra (latest)
-            - **SUSFS**: gki-android13-5.15 (latest)
-            - **KMI**: android13-5.15
+            - **SUSFS**: gki-android12-5.10 (latest)
+            - **KMI**: android12-5.10 (5.10.198)
+            - **Exact Version**: 5.10.198-android12-9-00085-g226a9632f13d-ab11136126
             - **KPM**: ${{ inputs.kpm_enabled }}
             - **TCP Optimization**: ${{ inputs.tcp_optimization }} (BBR)
             - **ZRAM Optimization**: ${{ inputs.zram_optimization }}
