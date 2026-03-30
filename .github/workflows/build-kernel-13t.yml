@@ -1,4 +1,4 @@
-name: Build GKI Kernel (Xiaomi 13T — android12-5.10)
+name: Build GKI Kernel (Xiaomi 13T — android12-5.10 — ReSukiSU)
 
 on:
   workflow_dispatch:
@@ -6,10 +6,10 @@ on:
       kernelsu_variant:
         description: 'KernelSU Variant'
         required: true
-        default: 'SukiSU-Ultra'
+        default: 'ReSukiSU'
         type: choice
         options:
-          - SukiSU-Ultra
+          - ReSukiSU
       kernel_version:
         description: 'Kernel version (android12-5.10)'
         required: true
@@ -97,12 +97,12 @@ jobs:
             --no-tags \
             --force-sync
 
-      - name: Integrate SukiSU-Ultra
+      - name: Integrate ReSukiSU
         run: |
           cd kernel_workspace/common
           SUKISU_COMMIT="${{ steps.config.outputs.sukisu_commit }}"
 
-          curl -sSL "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" \
+          curl -sSL "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
             -o /tmp/sukisu_setup.sh
           chmod +x /tmp/sukisu_setup.sh
 
@@ -187,7 +187,6 @@ jobs:
       - name: Build kernel
         run: |
           cd kernel_workspace
-          # For 5.10, we often need LLVM/Clang from AOSP or use build.sh
           BUILD_CONFIG=common/build.config.gki.aarch64 \
             build/build.sh \
             -j$(nproc) \
@@ -206,7 +205,7 @@ jobs:
           # boot.img (GKI format)
           if [ -f kernel_workspace/out/android12-5.10/dist/boot.img ]; then
             cp kernel_workspace/out/android12-5.10/dist/boot.img \
-               output/boot-FemmyFlasher-SukiSU-android12-5.10.img
+               output/boot-FemmyFlasher-ReSukiSU-android12-5.10.img
           fi
           # Kernel image (untuk AnyKernel3 / manual patch)
           if [ -f kernel_workspace/out/android12-5.10/dist/Image ]; then
@@ -229,12 +228,12 @@ jobs:
         if: ${{ inputs.upload_release == true }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "kernel-13T-A12-${{ github.run_number }}"
-          name: "GKI Kernel — Xiaomi 13T | SukiSU-Ultra + SUSFS | android12-5.10"
+          tag_name: "kernel-13T-A12-ReSukiSU-${{ github.run_number }}"
+          name: "GKI Kernel — Xiaomi 13T | ReSukiSU + SUSFS | android12-5.10"
           body: |
             ## 📦 Build Info
             - **Device**: Xiaomi 13T (dimensity 8200-Ultra)
-            - **KernelSU**: SukiSU-Ultra (latest)
+            - **KernelSU**: ReSukiSU (latest)
             - **SUSFS**: gki-android12-5.10 (latest)
             - **KMI**: android12-5.10 (5.10.198)
             - **Exact Version**: 5.10.198-android12-9-00085-g226a9632f13d-ab11136126

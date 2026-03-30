@@ -16,7 +16,7 @@
 custom=false
 
 # 变体配置 (sukisu/resukisu/mksu/...)
-variant=sukisu
+variant=resukisu
 
 # ==================== SUSFS 各分支的 commit hash ====================
 # 仅当 custom=true 时生效
