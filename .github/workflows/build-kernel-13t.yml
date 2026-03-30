@@ -88,10 +88,9 @@ jobs:
         run: |
           mkdir -p kernel_workspace
           cd kernel_workspace
-          # Syncing targeting android12-5.10-2023-11 for 5.10.198 match
           repo init \
             -u https://android.googlesource.com/kernel/manifest \
-            -b common-android12-5.10-2023-11 \
+            -b common-android12-5.10 \
             --depth=1
           repo sync -c -j$(nproc) \
             --no-clone-bundle \
