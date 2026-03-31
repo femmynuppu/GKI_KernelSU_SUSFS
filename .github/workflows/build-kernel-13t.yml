@@ -63,7 +63,7 @@ jobs:
           haskell: true
           large-packages: true
           docker-images: true
-          swap-storage: true
+          swap-storage: false
 
       - name: Setup build environment
         run: |
@@ -208,9 +208,10 @@ jobs:
       - name: Build kernel
         run: |
           cd kernel_workspace
+          export LDFLAGS="-Wl,--thinlto-jobs=1"
           BUILD_CONFIG=common/build.config.gki.aarch64 \
             build/build.sh \
-            -j$(nproc) \
+            -j2 \
             ARCH=arm64 \
             CC=clang \
             LD=ld.lld \
