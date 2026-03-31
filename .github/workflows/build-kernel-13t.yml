@@ -159,6 +159,10 @@ jobs:
           export KBUILD_BUILD_USER="build-user"
           export KBUILD_BUILD_HOST="build-host"
           export KBUILD_BUILD_TIMESTAMP="Wed Nov 22 14:16:37 UTC 2023"
+          
+          # Fix the double SMP PREEMPT bug native to Xiaomi's build
+          sed -i 's/#define UTS_VERSION .*/#define UTS_VERSION "#1 SMP PREEMPT #1 SMP PREEMPT Wed Nov 22 14:16:37 UTC 2023"/g' common/scripts/mkcompile_h || true
+
           export LDFLAGS="-Wl,--thinlto-jobs=1"
           BUILD_CONFIG=common/build.config.gki.aarch64 \
             build/build.sh \
