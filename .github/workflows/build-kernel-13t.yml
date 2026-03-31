@@ -244,6 +244,21 @@ jobs:
           fi
           ls -lah output/
 
+      - name: Package AnyKernel3
+        run: |
+          if [ -f kernel_workspace/out/android12-5.10/dist/Image ]; then
+            git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+            cd AnyKernel3
+            # Basic AnyKernel3 config for GKI/Xiaomi 13T
+            sed -i 's/kernel.string=.*/kernel.string=GKI Kernel Xiaomi 13T (ReSukiSU)/g' anykernel.sh
+            sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+            sed -i 's!block=/dev/block/bootdevice/by-name/boot;!block=auto;!g' anykernel.sh
+            sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' anykernel.sh
+            rm -rf .git
+            cp ../kernel_workspace/out/android12-5.10/dist/Image .
+            zip -r9 ../output/AnyKernel3-Xiaomi13T-android12-5.10-ReSukiSU.zip * -x README.md *placeholder
+          fi
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -270,9 +285,10 @@ jobs:
             - **Build**: #${{ github.run_number }}
 
             ## ⚠️ Cara Flash
-            1. Backup boot.img original dulu!
-            2. Flash via `fastboot flash boot boot-*.img`
-            atau patch manual pakai Magisk/APatch kalau mau pertahankan root yang ada
+            - **Cara 1 (Zip - Rekomendasi)**: Flash file `AnyKernel3-*.zip` via Custom Recovery (TWRP/OrangeFox), Franco Kernel Manager, atau KernelSU App (via modul install).
+            - **Cara 2 (Image)**: Flash file `boot-*.img` via `fastboot flash boot boot-*.img`
+            
+            *Penting: Selalu backup boot.img bawaan sebelum melakukan flash.*
           files: output/*
           draft: false
           prerelease: false
