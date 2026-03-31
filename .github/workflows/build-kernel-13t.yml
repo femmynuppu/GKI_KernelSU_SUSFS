@@ -187,8 +187,8 @@ jobs:
       - name: Build kernel
         run: |
           cd kernel_workspace
-          sed -i 's/check_defconfig//g' build/_setup_env.sh build/build.sh || true
           export SKIP_DEFCONFIG_CHECK=1
+          export POST_DEFCONFIG_CMDS="true"
           BUILD_CONFIG=common/build.config.gki.aarch64 \
             build/build.sh \
             -j$(nproc) \
