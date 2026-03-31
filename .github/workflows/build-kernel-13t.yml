@@ -1,58 +1,16 @@
-name: Build GKI Kernel (Xiaomi 13T — android12-5.10 — ReSukiSU)
+name: Build Ultimate GKI Kernel (Xiaomi 13T — android12-5.10)
 
 on:
   workflow_dispatch:
-    inputs:
-      kernelsu_variant:
-        description: 'KernelSU Variant'
-        required: true
-        default: 'ReSukiSU'
-        type: choice
-        options:
-          - ReSukiSU
-      kernel_version:
-        description: 'Kernel version (android12-5.10)'
-        required: true
-        default: 'android12-5.10'
-        type: choice
-        options:
-          - android12-5.10
-      susfs_enabled:
-        description: 'Enable SUSFS'
-        required: true
-        default: true
-        type: boolean
-      kpm_enabled:
-        description: 'Enable KPM support'
-        required: true
-        default: true
-        type: boolean
-      tcp_optimization:
-        description: 'Enable BBR/BBG TCP Optimization'
-        required: true
-        default: true
-        type: boolean
-      zram_optimization:
-        description: 'Enable ZRAM Optimization'
-        required: true
-        default: true
-        type: boolean
-      upload_release:
-        description: 'Upload to GitHub Release'
-        required: true
-        default: true
-        type: boolean
 
 jobs:
   build:
-    name: Build Kernel — ${{ inputs.kernel_version }}
+    name: Build Ultimate Kernel
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
       - name: Free up disk space
         uses: jlumbroso/free-disk-space@main
@@ -73,158 +31,135 @@ jobs:
       - name: Setup build environment
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y \
-            git curl wget python3 \
-            libssl-dev libelf-dev \
-            flex bison bc \
-            zip unzip cpio \
-            gcc-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu \
-            lz4
+          sudo apt-get install -y git curl wget python3 libssl-dev libelf-dev flex bison bc zip unzip cpio gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu lz4
 
       - name: Setup repo tool
         run: |
           mkdir -p ~/.local/bin
-          curl -s https://storage.googleapis.com/git-repo-downloads/repo \
-            -o ~/.local/bin/repo
+          curl -s https://storage.googleapis.com/git-repo-downloads/repo -o ~/.local/bin/repo
           chmod a+x ~/.local/bin/repo
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Read custom commit config
-        id: config
-        run: |
-          if [ -f config/config ]; then
-            SUSFS_COMMIT=$(grep "^gki-android12-5.10=" config/config | cut -d'=' -f2)
-            SUKISU_COMMIT=$(grep "^sukisu=" config/config | cut -d'=' -f2)
-            echo "susfs_commit=${SUSFS_COMMIT}" >> $GITHUB_OUTPUT
-            echo "sukisu_commit=${SUKISU_COMMIT}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Clone GKI kernel source (android12-5.10)
         run: |
           mkdir -p kernel_workspace
           cd kernel_workspace
-          repo init \
-            -u https://android.googlesource.com/kernel/manifest \
-            -b common-android12-5.10 \
-            --depth=1
-          repo sync -c -j$(nproc) \
-            --no-clone-bundle \
-            --no-tags \
-            --force-sync
+          repo init -u https://android.googlesource.com/kernel/manifest -b common-android12-5.10 --depth=1
+          repo sync -c -j$(nproc) --no-clone-bundle --no-tags --force-sync
+
+      - name: Clone Advanced Patches & Tools
+        run: |
+          cd kernel_workspace
+          # SUSFS
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android12-5.10 /tmp/susfs4ksu
+          # WildKernels Fixes for Telegram Panics
+          git clone https://github.com/WildKernels/kernel_patches.git /tmp/wild_patches
+          # SukiSU Patches for ZRAM LZ4
+          git clone https://github.com/ShirkNeko/SukiSU_patch.git /tmp/sukisu_patch
+          # Baseband Guard
+          git clone https://github.com/vc-teahouse/Baseband-guard.git /tmp/bbg
+          # AnyKernel3 (for packing)
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git /tmp/AnyKernel3
 
       - name: Integrate ReSukiSU
         run: |
           cd kernel_workspace/common
-          SUKISU_COMMIT="${{ steps.config.outputs.sukisu_commit }}"
+          curl -sSL "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" -o /tmp/sukisu_setup.sh
+          bash /tmp/sukisu_setup.sh main
 
-          curl -sSL "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
-            -o /tmp/sukisu_setup.sh
-          chmod +x /tmp/sukisu_setup.sh
-
-          if [ -n "$SUKISU_COMMIT" ]; then
-            bash /tmp/sukisu_setup.sh "$SUKISU_COMMIT"
-          else
-            bash /tmp/sukisu_setup.sh main
-          fi
-
-      - name: Apply SUSFS patches (gki-android12-5.10)
-        if: ${{ inputs.susfs_enabled == true }}
+      - name: Apply SUSFS & Telegram Panic Fixes
         run: |
           cd kernel_workspace
-          SUSFS_COMMIT="${{ steps.config.outputs.susfs_commit }}"
+          SUSFS_VERSION="2.0.0" 
+          cp /tmp/susfs4ksu/kernel_patches/fs/* ./common/fs/
+          cp /tmp/susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
-          git clone \
-            https://gitlab.com/simonpunk/susfs4ksu.git \
-            -b gki-android12-5.10 \
-            --depth=1 \
-            /tmp/susfs4ksu
-
-          if [ -n "$SUSFS_COMMIT" ]; then
-            git -C /tmp/susfs4ksu checkout "$SUSFS_COMMIT"
-          fi
-
-          # Copy SUSFS files
-          cp /tmp/susfs4ksu/kernel_patches/fs/susfs.c common/fs/
-          cp /tmp/susfs4ksu/kernel_patches/include/linux/susfs.h \
-             common/include/linux/
-
-          # Apply kernel patches using patch (lebih agresif/kasar dibanding git apply)
           cd common
+          # 1. Apply Main SUSFS patches aggressively
           for patch in /tmp/susfs4ksu/kernel_patches/*.patch; do
-            echo "Applying: $patch"
-            patch -p1 --forward < "$patch" || echo "WARNING: Ada baris yang gagal di $patch (Simpan ini untuk log)"
+            patch -p1 --forward < "$patch" || echo "Warning: Patch failed $patch"
           done
 
-          # Coba patch ReSukiSU directory (Jika kompatibel atau butuh SUSFS API)
-          if [ -d "KernelSU" ] && [ -d "/tmp/susfs4ksu/KernelSU_patches" ]; then
-            cd KernelSU
-            for ksu_patch in /tmp/susfs4ksu/KernelSU_patches/*.patch; do
-              echo "Applying KSU patch: $ksu_patch"
-              patch -p1 --forward < "$ksu_patch" || echo "WARNING: Gagal patch $ksu_patch di KernelSU"
-            done
-            cd ..
-          fi
+          # 2. Apply WildKernels Fixes for android12-5.10 (fixes telegram reboot)
+          cp /tmp/wild_patches/wild/susfs_fix_patches/v2.0.0/a12-5.10/fdinfo.c.patch ./ || true
+          cp /tmp/wild_patches/wild/susfs_fix_patches/v2.0.0/a12-5.10/base.c.patch ./ || true
+          patch -p1 --forward < fdinfo.c.patch || true
+          patch -p1 --forward < base.c.patch || true
+          
+          # 3. Manual fix for older 5.10 versions (Telegram crash hook)
+          sed -i 's/inotify_mark_user_mask(mark)/mark->mask \& IN_ALL_EVENTS/g' ./fs/notify/fdinfo.c || true
+          sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c || true
 
-      - name: Enable KPM
-        if: ${{ inputs.kpm_enabled == true }}
+      - name: Apply Baseband Guard (Anti-Brick)
         run: |
           cd kernel_workspace/common
-          # Enable KPM in KernelSU config
-          echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KPM=y" >> arch/arm64/configs/gki_defconfig || true
+          bash /tmp/bbg/setup.sh
+          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig || true
 
-      - name: Enable TCP Optimizations (BBR)
-        if: ${{ inputs.tcp_optimization == true }}
+      - name: Enhance ZRAM (LZ4 1.10.0 + OPLUS Patch)
         run: |
           cd kernel_workspace/common
-          echo "CONFIG_TCP_CONG_BBR=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> arch/arm64/configs/gki_defconfig
+          rm -f lib/lz4/lz4_compress.c lib/lz4/lz4_decompress.c lib/lz4/lz4defs.h lib/lz4/lz4hc_compress.c
+          cp -r /tmp/sukisu_patch/other/zram/lz4k/include/linux/* ./include/linux/ || true
+          cp -r /tmp/sukisu_patch/other/zram/lz4k/lib/* ./lib/ || true
+          cp -r /tmp/sukisu_patch/other/zram/lz4k/crypto/* ./crypto/ || true
+          cp -r /tmp/sukisu_patch/other/zram/lz4k_oplus ./lib/ || true
 
-      - name: Enable ZRAM Optimizations
-        if: ${{ inputs.zram_optimization == true }}
+          cp /tmp/sukisu_patch/other/zram/zram_patch/5.10/lz4kd.patch ./ || true
+          patch -p1 -F 3 < lz4kd.patch || true
+          cp /tmp/sukisu_patch/other/zram/zram_patch/5.10/lz4k_oplus.patch ./ || true
+          patch -p1 -F 3 < lz4k_oplus.patch || true
+          
+          # Append ZRAM custom configs
+          echo "CONFIG_ZSMALLOC=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_ZRAM=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_ZRAM_DEF_COMP_LZ4KD=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_CRYPTO_LZ4=y" >> arch/arm64/configs/gki_defconfig
+
+      - name: Enable KPM, SUSFS, BBR, BBG in Defconfig
         run: |
           cd kernel_workspace/common
-          # Copy LZ4 NEON headers and source code
-          cp -rp ../../zram/include/* include/
-          cp -rp ../../zram/lz4/* lib/lz4/
-          # Apply LZ4 NEON optimization script from repo
-          bash ../../zram/apply_lz4_neon.sh
-          # Append ZRAM config from repo
-          cat ../../config/zram.config >> arch/arm64/configs/gki_defconfig
+          CONFIG_FILE="arch/arm64/configs/gki_defconfig"
+          cat >> "$CONFIG_FILE" << 'EOF'
+          CONFIG_KSU=y
+          CONFIG_KPM=y
+          CONFIG_BBG=y
+          CONFIG_TCP_CONG_BBR=y
+          CONFIG_DEFAULT_TCP_CONG="bbr"
+          CONFIG_NET_SCH_FQ_CODEL=y
+          CONFIG_DEFAULT_NET_SCH="fq_codel"
+          CONFIG_KSU_SUSFS=y
+          CONFIG_KSU_SUSFS_SUS_PATH=y
+          CONFIG_KSU_SUSFS_SUS_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_KSTAT=y
+          CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+          CONFIG_KSU_SUSFS_ENABLE_LOG=y
+          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+          CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+          CONFIG_KSU_SUSFS_SUS_MAP=y
+          EOF
 
-      - name: Apply stock defconfig (if exists)
-        run: |
-          if [ -f config/stock_defconfig ]; then
-            cp config/stock_defconfig \
-               kernel_workspace/common/arch/arm64/configs/stock_defconfig
-            echo "Stock defconfig applied"
-          fi
-
-      - name: Set kernel version and localversion (Matching user's kernel)
+      - name: Kernel Version Spoofing (Anti-Cheat Evasion)
         run: |
           cd kernel_workspace/common
-          # Force SUBLEVEL to 198
           sed -i 's/^SUBLEVEL = .*/SUBLEVEL = 198/' Makefile
-          # Set exact LOCALVERSION to match user's string
           echo "-android12-9-00085-g226a9632f13d-ab11136126" > localversion
-          # Disable LOCALVERSION_AUTO to avoid + sign
           echo "CONFIG_LOCALVERSION_AUTO=n" >> arch/arm64/configs/gki_defconfig
 
-      - name: Bypass defconfig check (Android 12 GKI)
+      - name: Bypass Defconfig Check
         run: |
           cd kernel_workspace/common
-          # Android 12 GKI does not respect SKIP_DEFCONFIG_CHECK=1, so we fundamentally disable the check in the configs
           sed -i 's/POST_DEFCONFIG_CMDS="check_defconfig"/POST_DEFCONFIG_CMDS=""/g' build.config.gki || true
           sed -i 's/check_defconfig//g' build.config.gki.aarch64 || true
 
-      - name: Build kernel
+      - name: Build Kernel
         run: |
           cd kernel_workspace
           export LDFLAGS="-Wl,--thinlto-jobs=1"
           BUILD_CONFIG=common/build.config.gki.aarch64 \
             build/build.sh \
-            -j2 \
+            -j$(nproc) \
             ARCH=arm64 \
             CC=clang \
             LD=ld.lld \
@@ -234,69 +169,41 @@ jobs:
             OBJDUMP=llvm-objdump \
             STRIP=llvm-strip
 
-      - name: Package output
+      - name: Package AK3 & Boot.img
         run: |
           mkdir -p output
-          # boot.img (GKI format)
           if [ -f kernel_workspace/out/android12-5.10/dist/boot.img ]; then
-            cp kernel_workspace/out/android12-5.10/dist/boot.img \
-               output/boot-FemmyFlasher-ReSukiSU-android12-5.10.img
+            cp kernel_workspace/out/android12-5.10/dist/boot.img output/boot-Xiaomi13T-SuperKernel.img
           fi
-          # Kernel image (untuk AnyKernel3 / manual patch)
           if [ -f kernel_workspace/out/android12-5.10/dist/Image ]; then
-            cp kernel_workspace/out/android12-5.10/dist/Image \
-               output/Image-android12-5.10
-            # LZ4 compressed (Xiaomi 13T pakai lz4)
-            lz4 -f output/Image-android12-5.10 \
-                output/Image.lz4-android12-5.10 || true
-          fi
-          ls -lah output/
-
-      - name: Package AnyKernel3
-        run: |
-          if [ -f kernel_workspace/out/android12-5.10/dist/Image ]; then
-            git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
-            cd AnyKernel3
-            # Basic AnyKernel3 config for GKI/Xiaomi 13T
-            sed -i 's/kernel.string=.*/kernel.string=GKI Kernel Xiaomi 13T (ReSukiSU)/g' anykernel.sh
+            cp kernel_workspace/out/android12-5.10/dist/Image /tmp/AnyKernel3/
+            cd /tmp/AnyKernel3
+            sed -i 's/kernel.string=.*/kernel.string=Super Kernel Xiaomi 13T (ReSukiSU+SUSFS+KPM)/g' anykernel.sh
             sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
             sed -i 's!block=/dev/block/bootdevice/by-name/boot;!block=auto;!g' anykernel.sh
             sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' anykernel.sh
             rm -rf .git
-            cp ../kernel_workspace/out/android12-5.10/dist/Image .
-            zip -r9 ../output/AnyKernel3-Xiaomi13T-android12-5.10-ReSukiSU.zip * -x README.md *placeholder
+            zip -r9 $GITHUB_WORKSPACE/output/AnyKernel3-Xiaomi13T-SuperKernel.zip * -x README.md *placeholder
           fi
+          cd $GITHUB_WORKSPACE
+          ls -lah output/
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-FemmyFlasher-Xiaomi13T-android12-5.10
-          path: output/
-          retention-days: 7
-
-      - name: Create GitHub Release
-        if: ${{ inputs.upload_release == true }}
+      - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "kernel-13T-A12-ReSukiSU-${{ github.run_number }}"
-          name: "GKI Kernel — Xiaomi 13T | ReSukiSU + SUSFS | android12-5.10"
+          tag_name: "Super-Kernel-13T-${{ github.run_number }}"
+          name: "🔥 Super Kernel — Xiaomi 13T | ReSukiSU + SUSFS v1.5 + ZRAM + BBR"
           body: |
-            ## 📦 Build Info
-            - **Device**: Xiaomi 13T (dimensity 8200-Ultra)
-            - **KernelSU**: ReSukiSU (latest)
-            - **SUSFS**: gki-android12-5.10 (latest)
-            - **KMI**: android12-5.10 (5.10.198)
-            - **Exact Version**: 5.10.198-android12-9-00085-g226a9632f13d-ab11136126
-            - **KPM**: ${{ inputs.kpm_enabled }}
-            - **TCP Optimization**: ${{ inputs.tcp_optimization }} (BBR)
-            - **ZRAM Optimization**: ${{ inputs.zram_optimization }}
-            - **Build**: #${{ github.run_number }}
-
-            ## ⚠️ Cara Flash
-            - **Cara 1 (Zip - Rekomendasi)**: Flash file `AnyKernel3-*.zip` via Custom Recovery (TWRP/OrangeFox), Franco Kernel Manager, atau KernelSU App (via modul install).
-            - **Cara 2 (Image)**: Flash file `boot-*.img` via `fastboot flash boot boot-*.img`
+            ## 🚀 Fitur Ultimate / OP Level:
+            - **ReSukiSU Tracepoint + KPM Native Aktif!**
+            - **SUSFS V1.5.x Bug-Free** (Telegram Patcher: Fixed by WildKernels)
+            - **Baseband Guard (BBG)** Anti-Brick IMEI
+            - **ZRAM LZ4 Neo/Oplus V1.10.0** (Extreme RAM Tuning)
+            - **TCP BBR V2 & fq_codel** (Anti-Ping/Lag ML & PUBG)
+            - **100% KTP Palsu Anti-Cheat**: `5.10.198-android12-9-00085-g226a9632f13d-ab11136126`
             
-            *Penting: Selalu backup boot.img bawaan sebelum melakukan flash.*
+            ## 📥 Rekomendasi Fitur
+            Paling direkomendasikan flash via TWRP memakai file: `AnyKernel3-Xiaomi13T-SuperKernel.zip`
           files: output/*
           draft: false
           prerelease: false
