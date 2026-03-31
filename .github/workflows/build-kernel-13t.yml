@@ -2,6 +2,36 @@ name: Build Ultimate GKI Kernel (Xiaomi 13T — android12-5.10)
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Custom Version Name (Optional)"
+        required: false
+        type: string
+      build_time:
+        description: "Custom Build Time (Optional, leave blank for current UTC)"
+        required: false
+        type: string
+        default: "Wed Nov 22 14:16:37 UTC 2023"
+      use_zram:
+        description: "Enable ZRAM LZ4 1.10.0 Enhancements"
+        required: true
+        type: boolean
+        default: true
+      use_bbg:
+        description: "Enable Anti-Brick (Baseband Guard)"
+        required: true
+        type: boolean
+        default: true
+      use_kpm:
+        description: "Enable Native Kernel Patch Module (KPM)"
+        required: true
+        type: boolean
+        default: true
+      cancel_susfs:
+        description: "DISABLE SUSFS (Not Recommended)"
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -68,6 +98,7 @@ jobs:
           bash /tmp/sukisu_setup.sh main
 
       - name: Apply SUSFS & Telegram Panic Fixes
+        if: ${{ !inputs.cancel_susfs }}
         run: |
           cd kernel_workspace
           SUSFS_VERSION="2.0.0" 
@@ -91,12 +122,14 @@ jobs:
           sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c || true
 
       - name: Apply Baseband Guard (Anti-Brick)
+        if: ${{ inputs.use_bbg }}
         run: |
           cd kernel_workspace/common
           bash /tmp/bbg/setup.sh
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig || true
 
       - name: Enhance ZRAM (LZ4 1.10.0 + OPLUS Patch)
+        if: ${{ inputs.use_zram }}
         run: |
           cd kernel_workspace/common
           rm -f lib/lz4/lz4_compress.c lib/lz4/lz4_decompress.c lib/lz4/lz4defs.h lib/lz4/lz4hc_compress.c
@@ -120,14 +153,26 @@ jobs:
         run: |
           cd kernel_workspace/common
           CONFIG_FILE="arch/arm64/configs/gki_defconfig"
+          
+          # Always inject KSU and BBR
           cat >> "$CONFIG_FILE" << 'EOF'
           CONFIG_KSU=y
-          CONFIG_KPM=y
-          CONFIG_BBG=y
           CONFIG_TCP_CONG_BBR=y
           CONFIG_DEFAULT_TCP_CONG="bbr"
           CONFIG_NET_SCH_FQ_CODEL=y
           CONFIG_DEFAULT_NET_SCH="fq_codel"
+          EOF
+          
+          if [ "${{ inputs.use_kpm }}" = "true" ]; then
+            echo "CONFIG_KPM=y" >> "$CONFIG_FILE"
+          fi
+          
+          if [ "${{ inputs.use_bbg }}" = "true" ]; then
+            echo "CONFIG_BBG=y" >> "$CONFIG_FILE"
+          fi
+          
+          if [ "${{ inputs.cancel_susfs }}" = "false" ]; then
+            cat >> "$CONFIG_FILE" << 'EOF'
           CONFIG_KSU_SUSFS=y
           CONFIG_KSU_SUSFS_SUS_PATH=y
           CONFIG_KSU_SUSFS_SUS_MOUNT=y
@@ -139,6 +184,7 @@ jobs:
           CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
+          fi
 
       - name: Kernel Version Spoofing (Anti-Cheat Evasion)
         run: |
@@ -156,12 +202,25 @@ jobs:
       - name: Build Kernel
         run: |
           cd kernel_workspace
+          
+          # Dynamic Inputs or Fallbacks
+          export VERSION_STRING="${{ github.event.inputs.version || 'GKI_KernelSU_SUSFS' }}"
+          export BUILD_TIME_STR="${{ github.event.inputs.build_time || 'Wed Nov 22 14:16:37 UTC 2023' }}"
+          
           export KBUILD_BUILD_USER="build-user"
           export KBUILD_BUILD_HOST="build-host"
-          export KBUILD_BUILD_TIMESTAMP="Wed Nov 22 14:16:37 UTC 2023"
+          export KBUILD_BUILD_TIMESTAMP="$BUILD_TIME_STR"
           
           # Fix the SMP PREEMPT to single standard format
-          sed -i 's/#define UTS_VERSION .*/#define UTS_VERSION "#1 SMP PREEMPT Wed Nov 22 14:16:37 UTC 2023"/g' common/scripts/mkcompile_h || true
+          sed -i "s/#define UTS_VERSION .*/#define UTS_VERSION \"#1 SMP PREEMPT $BUILD_TIME_STR\"/g" common/scripts/mkcompile_h || true
+
+          # CRITICAL FIX for Baseband Guard's `genheaders` script (clang-12: error: Executable "ld" doesn't exist!)
+          echo 'export LD=ld.lld' >> common/build.config.gki.aarch64
+          echo 'export AR=llvm-ar' >> common/build.config.gki.aarch64
+          echo 'export NM=llvm-nm' >> common/build.config.gki.aarch64
+          echo 'export OBJCOPY=llvm-objcopy' >> common/build.config.gki.aarch64
+          echo 'export OBJDUMP=llvm-objdump' >> common/build.config.gki.aarch64
+          echo 'export STRIP=llvm-strip' >> common/build.config.gki.aarch64
 
           export LDFLAGS="-Wl,--thinlto-jobs=1"
           BUILD_CONFIG=common/build.config.gki.aarch64 \
