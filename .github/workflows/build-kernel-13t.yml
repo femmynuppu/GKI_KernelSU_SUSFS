@@ -149,14 +149,22 @@ jobs:
           cp /tmp/susfs4ksu/kernel_patches/include/linux/susfs.h \
              common/include/linux/
 
-          # Apply patches
+          # Apply kernel patches using patch (lebih agresif/kasar dibanding git apply)
           cd common
           for patch in /tmp/susfs4ksu/kernel_patches/*.patch; do
             echo "Applying: $patch"
-            git apply --check "$patch" 2>/dev/null && \
-              git apply "$patch" || \
-              echo "SKIP (already applied or incompatible): $patch"
+            patch -p1 --forward < "$patch" || echo "WARNING: Ada baris yang gagal di $patch (Simpan ini untuk log)"
           done
+
+          # Coba patch ReSukiSU directory (Jika kompatibel atau butuh SUSFS API)
+          if [ -d "KernelSU" ] && [ -d "/tmp/susfs4ksu/KernelSU_patches" ]; then
+            cd KernelSU
+            for ksu_patch in /tmp/susfs4ksu/KernelSU_patches/*.patch; do
+              echo "Applying KSU patch: $ksu_patch"
+              patch -p1 --forward < "$ksu_patch" || echo "WARNING: Gagal patch $ksu_patch di KernelSU"
+            done
+            cd ..
+          fi
 
       - name: Enable KPM
         if: ${{ inputs.kpm_enabled == true }}
