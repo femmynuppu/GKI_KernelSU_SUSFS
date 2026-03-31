@@ -161,6 +161,9 @@ jobs:
         if: ${{ inputs.zram_optimization == true }}
         run: |
           cd kernel_workspace/common
+          # Copy LZ4 NEON headers and source code
+          cp -rp ../../zram/include/* include/
+          cp -rp ../../zram/lz4/* lib/lz4/
           # Apply LZ4 NEON optimization script from repo
           bash ../../zram/apply_lz4_neon.sh
           # Append ZRAM config from repo
