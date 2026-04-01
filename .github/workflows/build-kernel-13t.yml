@@ -215,13 +215,12 @@ jobs:
           sed -i "s/#define UTS_VERSION .*/#define UTS_VERSION \"#1 SMP PREEMPT $BUILD_TIME_STR\"/g" common/scripts/mkcompile_h || true
 
           # CRITICAL FIX for Baseband Guard's `genheaders` script (clang-12: error: Executable "ld" doesn't exist!)
-          echo 'export LD=ld.lld' >> common/build.config.gki.aarch64
-          echo 'export AR=llvm-ar' >> common/build.config.gki.aarch64
-          echo 'export NM=llvm-nm' >> common/build.config.gki.aarch64
-          echo 'export OBJCOPY=llvm-objcopy' >> common/build.config.gki.aarch64
-          echo 'export OBJDUMP=llvm-objdump' >> common/build.config.gki.aarch64
-          echo 'export STRIP=llvm-strip' >> common/build.config.gki.aarch64
-
+          for clang_dir in prebuilts-master/clang/host/linux-x86/*; do
+            if [ -d "$clang_dir/bin" ]; then
+              ln -sf ld.lld "$clang_dir/bin/ld" || true
+              ln -sf ld.lld "$clang_dir/bin/aarch64-linux-gnu-ld" || true
+            fi
+          done
           export LDFLAGS="-Wl,--thinlto-jobs=1"
           BUILD_CONFIG=common/build.config.gki.aarch64 \
             build/build.sh -j$(nproc)
