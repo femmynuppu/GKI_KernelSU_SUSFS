@@ -146,8 +146,27 @@ jobs:
           # Append ZRAM custom configs
           echo "CONFIG_ZSMALLOC=y" >> arch/arm64/configs/gki_defconfig
           echo "CONFIG_ZRAM=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_ZRAM_DEF_COMP_LZ4KD=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_ZRAM_DEF_COMP_LZ4=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_ZRAM_WRITEBACK=y" >> arch/arm64/configs/gki_defconfig
           echo "CONFIG_CRYPTO_LZ4=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NEON=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KERNEL_MODE_NEON=y" >> arch/arm64/configs/gki_defconfig
+
+      - name: Apply TCP Optimizer and BBRv3
+        run: |
+          cd kernel_workspace/common
+          # BBRv3
+          curl -LSs "https://raw.githubusercontent.com/google/bbr/v3/net/ipv4/tcp_bbr.c" -o net/ipv4/tcp_bbr.c || echo "Warning: Failed to fetch BBRv3"
+          
+          # Force TCP NoDelay Optimizer from wild_patches
+          cp /tmp/wild_patches/common/force_tcp_nodelay.patch ./ || true
+          patch -p1 --forward < force_tcp_nodelay.patch || echo "Warning: Failed to apply force_tcp_nodelay.patch"
+          
+          # TCP Optimizer Patches (TCP Fast Open, Window Scaling, Low Latency)
+          sed -i 's/sysctl_tcp_fastopen __read_mostly = TFO_CLIENT_ENABLE;/sysctl_tcp_fastopen __read_mostly = 3;/g' net/ipv4/sysctl_net_ipv4.c || true
+          sed -i 's/sysctl_tcp_low_latency __read_mostly;/sysctl_tcp_low_latency __read_mostly = 1;/g' net/ipv4/sysctl_net_ipv4.c || true
+          sed -i 's/sysctl_tcp_window_scaling __read_mostly = 1;/sysctl_tcp_window_scaling __read_mostly = 1;/g' net/ipv4/sysctl_net_ipv4.c || true
+          sed -i 's/sysctl_tcp_low_latency __read_mostly = 0;/sysctl_tcp_low_latency __read_mostly = 1;/g' net/ipv4/tcp.c || true
 
       - name: Enable KPM, SUSFS, BBR, BBG in Defconfig
         run: |
@@ -191,6 +210,7 @@ jobs:
           cd kernel_workspace/common
           sed -i 's/^SUBLEVEL = .*/SUBLEVEL = 198/' Makefile
           echo "-android12-9-00085-g226a9632f13d-ab11136126" > localversion
+          sed -i 's/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/' arch/arm64/configs/gki_defconfig
           echo "CONFIG_LOCALVERSION_AUTO=n" >> arch/arm64/configs/gki_defconfig
 
       - name: Bypass Defconfig Check
@@ -203,6 +223,10 @@ jobs:
         run: |
           cd kernel_workspace
           
+          # CRITICAL: Clean up staging area and force symlinks to prevent "File exists" error
+          rm -rf out/android12-5.10/staging
+          sed -i 's/ln -s/ln -sf/g' common/scripts/Makefile.modinst || true
+
           # Dynamic Inputs or Fallbacks
           export VERSION_STRING="${{ github.event.inputs.version || 'GKI_KernelSU_SUSFS' }}"
           export BUILD_TIME_STR="${{ github.event.inputs.build_time || 'Wed Nov 22 14:16:37 UTC 2023' }}"
