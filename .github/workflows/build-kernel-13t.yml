@@ -101,7 +101,7 @@ jobs:
         if: ${{ !inputs.cancel_susfs }}
         run: |
           cd kernel_workspace
-          SUSFS_VERSION="2.0.0" 
+          SUSFS_VERSION="2.1.0" 
           cp /tmp/susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp /tmp/susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
@@ -112,8 +112,8 @@ jobs:
           done
 
           # 2. Apply WildKernels Fixes for android12-5.10 (fixes telegram reboot)
-          cp /tmp/wild_patches/wild/susfs_fix_patches/v2.0.0/a12-5.10/fdinfo.c.patch ./ || true
-          cp /tmp/wild_patches/wild/susfs_fix_patches/v2.0.0/a12-5.10/base.c.patch ./ || true
+          cp /tmp/wild_patches/wild/susfs_fix_patches/v2.1.0/a12-5.10/fdinfo.c.patch ./ || true
+          cp /tmp/wild_patches/wild/susfs_fix_patches/v2.1.0/a12-5.10/base.c.patch ./ || true
           patch -p1 --forward < fdinfo.c.patch || true
           patch -p1 --forward < base.c.patch || true
           
@@ -167,6 +167,13 @@ jobs:
           sed -i 's/sysctl_tcp_low_latency __read_mostly;/sysctl_tcp_low_latency __read_mostly = 1;/g' net/ipv4/sysctl_net_ipv4.c || true
           sed -i 's/sysctl_tcp_window_scaling __read_mostly = 1;/sysctl_tcp_window_scaling __read_mostly = 1;/g' net/ipv4/sysctl_net_ipv4.c || true
           sed -i 's/sysctl_tcp_low_latency __read_mostly = 0;/sysctl_tcp_low_latency __read_mostly = 1;/g' net/ipv4/tcp.c || true
+
+      - name: Apply FuseFixer BPF Patch
+        run: |
+          cd kernel_workspace/common
+          # Fetch Gerrit Patch 3943780 (resolves fuse dentry interception for FuseFixer)
+          curl -LSs "https://android-review.googlesource.com/changes/kernel%2Fcommon~3943780/revisions/current/patch" | base64 -d > fuse_bpf_revalidate.patch || true
+          patch -p1 --forward < fuse_bpf_revalidate.patch || echo "Warning: Failed to apply FuseFixer patch"
 
       - name: Enable KPM, SUSFS, BBR, BBG in Defconfig
         run: |
@@ -272,14 +279,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "Super-Kernel-13T-${{ github.run_number }}"
-          name: "🔥 Super Kernel — Xiaomi 13T | ReSukiSU + SUSFS v1.5 + ZRAM + BBR"
+          name: "🔥 Super Kernel — Xiaomi 13T | ReSukiSU + SUSFS v2.1.0 + ZRAM + BBR"
           body: |
             ## 🚀 Fitur Ultimate / OP Level:
             - **ReSukiSU Tracepoint + KPM Native Aktif!**
-            - **SUSFS V1.5.x Bug-Free** (Telegram Patcher: Fixed by WildKernels)
+            - **SUSFS V2.1.0 Bug-Free** (Telegram Patcher: Fixed by WildKernels)
+            - **FuseFixer BPF Patch** (Dentry Intercept Fixed)
             - **Baseband Guard (BBG)** Anti-Brick IMEI
-            - **ZRAM LZ4 Neo/Oplus V1.10.0** (Extreme RAM Tuning)
-            - **TCP BBR V2 & fq_codel** (Anti-Ping/Lag ML & PUBG)
+            - **ZRAM LZ4 Neo/Oplus V1.10.0** (Extreme RAM Tuning + Writeback)
+            - **TCP BBR V3 & Optimizers** (Fast Open, Scaling, Low Latency)
             - **100% KTP Palsu Anti-Cheat**: `5.10.198-android12-9-00085-g226a9632f13d-ab11136126`
             
             ## 📥 Rekomendasi Fitur
