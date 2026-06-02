@@ -1135,12 +1135,6 @@ jobs:
           CONFIG_TMPFS_POSIX_ACL=y
           EOF
 
-          # 6.12：禁用内核 Rust，避免与 thin LTO 冲突（必须保留 thin LTO+CFI 才能匹配 stock KMI）
-          if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
-            echo "# CONFIG_RUST is not set" >> "$DEFCONFIG"
-            echo "已为 6.12 禁用 CONFIG_RUST 以兼容 thin LTO + CFI"
-          fi
-
           if [ "${{ inputs.ksu_variant }}" == "SukiSU" ] || [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ] || [ "${{ inputs.ksu_variant }}" == "Next" ]; then
             if [[ "${{ inputs.use_kpm }}" == enabled* ]] || [[ "${{ inputs.use_kpm }}" == patched* ]]; then
               if ! grep -RqsE '^[[:space:]]*config[[:space:]]+KPM([[:space:]]|$)' common KernelSU 2>/dev/null; then
@@ -1332,8 +1326,8 @@ jobs:
                 FRAG_FLAG="--defconfig_fragment=//common:arch/arm64/configs/ksu.fragment"
               fi
               # 6.12: 保持 thin LTO + CFI，以匹配 stock GKI 的 KMI（MTK WiFi/BT/GPU 厂商模块依赖 CFI）
-              # 此前 --lto=none 会连带关闭 CFI，导致厂商模块 ABI 不匹配 → WiFi/BT 失效、游戏时全核死锁
-              # Rust 与 thin LTO 的冲突改为通过禁用 CONFIG_RUST 解决（见"配置内核选项"步骤）
+              # 保持 thin LTO + CFI，以匹配 stock GKI KMI（MTK WiFi/BT/GPU 厂商模块依赖 CFI）
+              # 注意：Rust 与 thin LTO 在现代 AOSP 工具链中是兼容的（GKI 6.12 官方亦如此构建）
               LTO_FLAG="--lto=thin"
               tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast $LTO_FLAG $FRAG_FLAG //common:kernel_aarch64_dist || exit 1
               strings ./bazel-bin/common/kernel_aarch64/Image | grep 'Linux version'
