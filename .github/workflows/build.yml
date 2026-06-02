@@ -1207,6 +1207,10 @@ jobs:
             # 配置 6.1+ 内核
             sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' ./common/BUILD.bazel
             sed -i '/kmi_symbol_list_strict_mode/d' ./common/BUILD.bazel
+            # rust_binder.ko: Kleaf thin-LTO dist target 要求此模块，但 Rust 工具链在此 CI 环境中无法构建它。
+            # AnyKernel3 仅替换 Image，不部署模块，故从 dist 要求中移除是安全的。
+            # thin LTO + CFI 保持启用以匹配 stock KMI。
+            sed -i '/rust_binder\.ko/d' ./common/BUILD.bazel
             rm -rf ./common/android/abi_gki_protected_exports_*
             sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
           fi
