@@ -131,7 +131,7 @@ jobs:
       kernel_version: "6.12"
       sub_level: ${{ matrix.sub_level }}
       os_patch_level: ${{ matrix.os_patch_level }}
-      ksu_variant: "ReSukiSU"
+      ksu_variant: "Next"
       ksu_branch: ${{ inputs.kernelsu_branch }}
       version: ${{ inputs.version || '' }}
       build_time: ${{ inputs.build_time || '' }}
