@@ -84,7 +84,7 @@ on:
 
 jobs:
   build-kernel:
-    name: "${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.android_version }}-${{ inputs.os_patch_level }}-ReSukiSU"
+    name: "${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.android_version }}-${{ inputs.os_patch_level }}-${{ inputs.ksu_variant }}"
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -107,7 +107,7 @@ jobs:
           echo "内核版本      : ${{ inputs.kernel_version }}"
           echo "子版本号      : ${{ inputs.sub_level }}"
           echo "补丁级别      : ${{ inputs.os_patch_level }}"
-          echo "KSU 变体      : ReSukiSU"
+          echo "KSU 变体      : ${{ inputs.ksu_variant }}"
           echo "KSU 分支      : ${{ inputs.ksu_branch }}"
           echo "构建时间      : ${{ inputs.build_time }}"
           echo "SUSFS 状态    : ${{ inputs.enable_susfs }}"
@@ -403,7 +403,7 @@ jobs:
           echo "obj-y += hmbird_patch.o" >> Makefile
 
       # ==================== 确定 KernelSU 分支 ====================
-      # ReSukiSU 支持自定义分支或 commit hash
+      # 支持自定义分支或 commit hash，默认依据 ksu_variant 决定
       - name: 确定 KernelSU 分支
         id: ksu-branch
         run: |
@@ -413,21 +413,31 @@ jobs:
           if [ -n "$branch_input" ]; then
             BRANCH="-s $branch_input"
             echo "使用自定义分支/提交: $branch_input"
+          elif [ "${{ inputs.ksu_variant }}" == "Next" ]; then
+            # KernelSU-Next 默认使用 next 分支（内置 SUSFS + 混合 Hook）
+            BRANCH="-s next"
+            echo "KernelSU-Next: 使用 next 分支"
           else
             # ReSukiSU 默认使用 main 分支
             BRANCH="-s main"
+            echo "ReSukiSU: 使用 main 分支"
           fi
 
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           echo "KSU 分支: $BRANCH"
 
       # ==================== 添加 KernelSU ====================
-      # 添加 ReSukiSU
+      # 根据 ksu_variant 选择 KernelSU-Next (KSUN) 或 ReSukiSU
       - name: 添加 KernelSU
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
-          echo "添加 ReSukiSU..."
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash $BRANCH
+          if [ "${{ inputs.ksu_variant }}" == "Next" ]; then
+            echo "添加 KernelSU-Next (KSUN) — 混合 Hook，CFI 安全，原生内置 SUSFS 支持..."
+            curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash $BRANCH
+          else
+            echo "添加 ReSukiSU..."
+            curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash $BRANCH
+          fi
 
           if [ -d "KernelSU/.git" ]; then
             KSU_LATEST_COMMIT_DATE=$(git -C KernelSU log -1 --date=format:'%Y-%m-%d %H:%M:%S %z' --format='%cd')
@@ -1481,7 +1491,7 @@ jobs:
       - name: 上传构建产物
         uses: actions/upload-artifact@v6
         with:
-          name: ReSukiSU_kernel-${{ env.CONFIG }}
+          name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}
           path: |
             *AnyKernel3.zip
 #            *.img
@@ -1492,7 +1502,7 @@ jobs:
         if: always() && env.REJ_COUNT > 0
         uses: actions/upload-artifact@v6
         with:
-          name: ReSukiSU_kernel-${{ env.CONFIG }}-Rejects
+          name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}-Rejects
           path: patch-rejects/
           if-no-files-found: ignore
           compression-level: 9
