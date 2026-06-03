@@ -1207,10 +1207,6 @@ jobs:
             # 配置 6.1+ 内核
             sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' ./common/BUILD.bazel
             sed -i '/kmi_symbol_list_strict_mode/d' ./common/BUILD.bazel
-            # rust_binder.ko: Kleaf thin-LTO dist target 要求此模块，但 Rust 工具链在此 CI 环境中无法构建它。
-            # AnyKernel3 仅替换 Image，不部署模块，故从 dist 要求中移除是安全的。
-            # thin LTO + CFI 保持启用以匹配 stock KMI。
-            sed -i '/rust_binder\.ko/d' ./common/BUILD.bazel
             rm -rf ./common/android/abi_gki_protected_exports_*
             sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
           fi
@@ -1341,12 +1337,20 @@ jobs:
               if [ -s "$FRAG" ]; then
                 FRAG_FLAG="--defconfig_fragment=//common:arch/arm64/configs/ksu.fragment"
               fi
-              # 6.12: 保持 thin LTO + CFI，以匹配 stock GKI 的 KMI（MTK WiFi/BT/GPU 厂商模块依赖 CFI）
-              # 保持 thin LTO + CFI，以匹配 stock GKI KMI（MTK WiFi/BT/GPU 厂商模块依赖 CFI）
-              # 注意：Rust 与 thin LTO 在现代 AOSP 工具链中是兼容的（GKI 6.12 官方亦如此构建）
-              LTO_FLAG="--lto=thin"
-              tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast $LTO_FLAG $FRAG_FLAG //common:kernel_aarch64_dist || exit 1
-              strings ./bazel-bin/common/kernel_aarch64/Image | grep 'Linux version'
+              if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+                # 6.12 关键修复（移植自 WildKernels，已在 Xiaomi 13T 验证无 WiFi/BT/游戏 bug）：
+                #   1) 不传显式 --lto 标志 → 使用 GKI 默认 thin LTO + CFI（匹配 stock KMI，保证 MTK 厂商模块 ABI 一致）
+                #   2) 用 bazel run + --dist_dir 代替 bazel build
+                # 显式 --lto=thin 会激活 lto_thin 配置变体，强制构建 rust_binder.ko 并在 CI 失败；
+                # 这正是社区误用 --lto=none（从而关闭 CFI、破坏 WiFi/BT/游戏）的根因。GKI 默认配置可正确处理 Rust 模块。
+                mkdir -p /home/runner/out
+                tools/bazel run --disk_cache=/home/runner/.cache/bazel --config=fast $FRAG_FLAG //common:kernel_aarch64_dist -- --dist_dir=/home/runner/out || exit 1
+                strings /home/runner/out/Image | grep 'Linux version'
+              else
+                # 6.1 / 6.6：保持原有已验证可用的构建方式（thin LTO + bazel build）
+                tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast --lto=thin $FRAG_FLAG //common:kernel_aarch64_dist || exit 1
+                strings ./bazel-bin/common/kernel_aarch64/Image | grep 'Linux version'
+              fi
             fi
 
             echo "一般情况下不会出错，除非KSU仓库和SUSFS仓库代码不同。"
@@ -1364,6 +1368,9 @@ jobs:
 
           if [ "${{ inputs.android_version }}" == "android12" ] || [ "${{ inputs.android_version }}" == "android13" ]; then
             SRC_DIR="$KERNEL_ROOT/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist"
+          elif [ "${{ inputs.kernel_version }}" == "6.12" ]; then
+            # 6.12 使用 bazel run --dist_dir，产物在 /home/runner/out
+            SRC_DIR="/home/runner/out"
           else
             SRC_DIR="$KERNEL_ROOT/bazel-bin/common/kernel_aarch64"
           fi
