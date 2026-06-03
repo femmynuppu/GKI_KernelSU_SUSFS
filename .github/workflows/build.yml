@@ -415,10 +415,11 @@ jobs:
             BRANCH="-s $branch_input"
             echo "使用自定义提交/tag: $branch_input"
           elif [ "${{ inputs.ksu_variant }}" == "Next" ]; then
-            # pershoot/KernelSU-Next dev-susfs 分支已内置所有 SUSFS Kconfig，
-            # 不传参数 → setup.sh 自动检出最新 tag（SUSFS 版本）
-            BRANCH=""
-            echo "KernelSU-Next: 使用 pershoot/dev-susfs 最新 tag（内置 SUSFS）"
+            # pershoot/KernelSU-Next 默认分支是 dev（无 SUSFS），
+            # 需要明确切换到 dev-susfs 分支（含完整 CONFIG_KSU_SUSFS Kconfig）。
+            # setup.sh 接受 branch/tag/commit 作为 $1 → bash -s dev-susfs
+            BRANCH="-s dev-susfs"
+            echo "KernelSU-Next: 切换到 pershoot/dev-susfs 分支（内置 SUSFS Kconfig）"
           else
             # ReSukiSU 默认使用 main 分支
             BRANCH="-s main"
