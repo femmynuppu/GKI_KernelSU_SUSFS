@@ -411,12 +411,14 @@ jobs:
 
           # 如果用户输入了自定义分支名或 commit hash，直接使用
           if [ -n "$branch_input" ]; then
+            # 用户指定了自定义 commit hash / tag
             BRANCH="-s $branch_input"
-            echo "使用自定义分支/提交: $branch_input"
+            echo "使用自定义提交/tag: $branch_input"
           elif [ "${{ inputs.ksu_variant }}" == "Next" ]; then
-            # KernelSU-Next 默认使用 next 分支（内置 SUSFS + 混合 Hook）
-            BRANCH="-s next"
-            echo "KernelSU-Next: 使用 next 分支"
+            # pershoot/KernelSU-Next dev-susfs 分支已内置所有 SUSFS Kconfig，
+            # 不传参数 → setup.sh 自动检出最新 tag（SUSFS 版本）
+            BRANCH=""
+            echo "KernelSU-Next: 使用 pershoot/dev-susfs 最新 tag（内置 SUSFS）"
           else
             # ReSukiSU 默认使用 main 分支
             BRANCH="-s main"
@@ -432,8 +434,18 @@ jobs:
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           if [ "${{ inputs.ksu_variant }}" == "Next" ]; then
-            echo "添加 KernelSU-Next (KSUN) — 混合 Hook，CFI 安全，原生内置 SUSFS 支持..."
-            curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash $BRANCH
+            # 使用 pershoot/KernelSU-Next dev-susfs 分支：
+            #   - 内置 CONFIG_KSU_SUSFS 及全部 10 项 SUSFS Kconfig
+            #   - 混合 Hook（kprobe 主 + CFI 安全 inline 备用），兼容 MediaTek CFI
+            #   - WildKernels 已验证该方案在 Android16/6.12 MediaTek 无 WiFi/BT 问题
+            echo "添加 KernelSU-Next (pershoot/dev-susfs) — CFI 安全混合 Hook + 内置 SUSFS..."
+            if [ -n "$BRANCH" ]; then
+              # 用户指定了特定 tag/commit
+              curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash $BRANCH
+            else
+              # 不传参数，使用最新 tag（含 SUSFS）
+              curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash
+            fi
           else
             echo "添加 ReSukiSU..."
             curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash $BRANCH
