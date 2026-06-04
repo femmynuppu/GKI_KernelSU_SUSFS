@@ -1242,10 +1242,8 @@ jobs:
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
 
-          if [ "${{ inputs.use_bbr }}" == "true" ]; then
-            echo "CONFIG_TCP_CONG_BBR=y" >> "$DEFCONFIG"
-            echo "CONFIG_DEFAULT_BBR=y" >> "$DEFCONFIG"
-          fi
+          echo "CONFIG_TCP_CONG_BBR=y" >> "$DEFCONFIG"
+          echo "CONFIG_DEFAULT_BBR=y" >> "$DEFCONFIG"
 
       # ==================== 配置内核名称 ====================
       - name: 配置内核名称
