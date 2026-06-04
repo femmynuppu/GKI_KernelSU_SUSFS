@@ -460,6 +460,19 @@ jobs:
             echo "KSU_LATEST_COMMIT_DATE=未知" >> $GITHUB_ENV
           fi
 
+          # ====== 应用 static.patch（KSUN专用，WildKernels已验证）======
+          # 将 pershoot/dev-susfs 中 selinux_hide.c 的 static 函数声明改为 non-static，
+          # 使这些 SELinux 函数对内核其他文件（包括 SUSFS selinuxfs.c 修改）全局可见，
+          # 从而解决 "undefined symbol: security_context_to_sid_with_policy" 链接错误。
+          if [ "${{ inputs.ksu_variant }}" == "Next" ] && [ -f "$GITHUB_WORKSPACE/patches/kernelsu/static.patch" ]; then
+            KSUN_DIR="KernelSU-Next"
+            [ -d "KernelSU" ] && KSUN_DIR="KernelSU"
+            if [ -d "$KSUN_DIR" ]; then
+              echo "应用 static.patch 到 $KSUN_DIR (使 SELinux 函数全局可见)..."
+              patch -p1 -d "$KSUN_DIR" < "$GITHUB_WORKSPACE/patches/kernelsu/static.patch" || echo "static.patch 已应用或跳过"
+            fi
+          fi
+
       # ==================== 应用 SUSFS 补丁 ====================
       # SUSFS (Super User SUS FileSystem) 用于隐藏 root 痕迹
       - name: 应用 SUSFS 补丁
@@ -571,12 +584,14 @@ jobs:
             fi
           fi
 
-          if [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ] || [ "${{ inputs.ksu_variant }}" == "Next" ]; then
-            echo "Removing hooks.c and selinuxfs.c modifications from susfs patch..."
-            echo "  Reason: selinuxfs.c mods call security_*_with_policy() functions absent in GKI 6.12.38;"
-            echo "  ReSukiSU and KernelSU-Next both provide their own native selinux integration."
+          if [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ]; then
+            # ReSukiSU: hapus hooks.c + selinuxfs.c dari SUSFS patch
+            # (ReSukiSU punya selinux integration sendiri; _with_policy functions tidak tersedia)
+            echo "Removing hooks.c and selinuxfs.c modifications from susfs patch for ReSukiSU compatibility..."
             sed -i '/^diff --git a\/security\/selinux\/hooks\.c b\/security\/selinux\/hooks\.c/,$d' 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
           fi
+          # KSUN (Next): JANGAN hapus selinuxfs.c — static.patch sudah membuat fungsi selinux dari
+          # KSUN selinux_hide.c tersedia secara global, sehingga selinuxfs.c bisa di-link dengan benar.
 
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
 
@@ -1350,27 +1365,35 @@ jobs:
               strings "out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist/Image" | grep 'Linux version'
             else
               # 6.1+ 内核使用 Bazel 构建
-              # 提取 gki_defconfig 修改到 fragment，避免 bazel trim 检查失败
-              FRAG="common/arch/arm64/configs/ksu.fragment"
-              diff "$DEFCONFIG.orig" "$DEFCONFIG" | grep '^>' | sed 's/^> //; s/^[[:space:]]*//' > "$FRAG" || true
-              cp "$DEFCONFIG.orig" "$DEFCONFIG"
-              echo "=== KSU Fragment 内容 ==="
-              cat "$FRAG"
-              echo "========================="
-              # 仅当 fragment 非空时传递参数
-              FRAG_FLAG=""
-              if [ -s "$FRAG" ]; then
-                FRAG_FLAG="--defconfig_fragment=//common:arch/arm64/configs/ksu.fragment"
+              if [ "${{ inputs.kernel_version }}" = "6.12" ] && [ "${{ inputs.ksu_variant }}" == "Next" ]; then
+                # ===== android16-6.12 + KSUN: 使用 WildKernels 已验证方案 =====
+                # pershoot/dev-susfs Kconfig 全部 CONFIG_KSU* 均为 default y，
+                # 无需 ksu.fragment。使用空 fragment 避免 Kleaf trim 变体可能干扰 LTO 配置。
+                # 还原 defconfig（configs 通过 Kconfig defaults 自动生效）
+                cp "$DEFCONFIG.orig" "$DEFCONFIG"
+                FRAG="common/arch/arm64/configs/wild_gki.fragment"
+                touch "$FRAG"
+                FRAG_FLAG="--defconfig_fragment=//common:arch/arm64/configs/wild_gki.fragment"
+                echo "=== KSUN+6.12: 使用空 fragment（WildKernels 方式）==="
+              else
+                # 其他变体/版本：提取 gki_defconfig 修改到 fragment
+                FRAG="common/arch/arm64/configs/ksu.fragment"
+                diff "$DEFCONFIG.orig" "$DEFCONFIG" | grep '^>' | sed 's/^> //; s/^[[:space:]]*//' > "$FRAG" || true
+                cp "$DEFCONFIG.orig" "$DEFCONFIG"
+                echo "=== KSU Fragment 内容 ==="
+                cat "$FRAG"
+                echo "========================="
+                FRAG_FLAG=""
+                if [ -s "$FRAG" ]; then
+                  FRAG_FLAG="--defconfig_fragment=//common:arch/arm64/configs/ksu.fragment"
+                fi
               fi
+
               if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
-                # 6.12 关键修复（移植自 WildKernels，已在 Xiaomi 13T 验证无 WiFi/BT/游戏 bug）：
-                #   1) 不传显式 --lto 标志 → 使用 GKI 默认 thin LTO + CFI（匹配 stock KMI，保证 MTK 厂商模块 ABI 一致）
-                #   2) 用 bazel run + --dist_dir 代替 bazel build
-                # 显式 --lto=thin 会激活 lto_thin 配置变体，强制构建 rust_binder.ko 并在 CI 失败；
-                # 这正是社区误用 --lto=none（从而关闭 CFI、破坏 WiFi/BT/游戏）的根因。GKI 默认配置可正确处理 Rust 模块。
+                # android16-6.12 dist runner: bazel run + --destdir + --config=stamp
+                # (移植自 WildKernels，已验证无 WiFi/BT/游戏 bug)
                 mkdir -p /home/runner/out
-                # android16-6.12 dist runner 使用 --destdir（不是 --dist_dir）
-                tools/bazel run --disk_cache=/home/runner/.cache/bazel --config=fast $FRAG_FLAG //common:kernel_aarch64_dist -- --destdir=/home/runner/out || exit 1
+                tools/bazel run --disk_cache=/home/runner/.cache/bazel --config=fast --config=stamp $FRAG_FLAG //common:kernel_aarch64_dist -- --destdir=/home/runner/out || exit 1
                 strings /home/runner/out/Image | grep 'Linux version'
               else
                 # 6.1 / 6.6：保持原有已验证可用的构建方式（thin LTO + bazel build）
