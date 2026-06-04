@@ -571,8 +571,10 @@ jobs:
             fi
           fi
 
-          if [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ]; then
-            echo "Removing hooks.c and selinuxfs.c modifications from susfs patch for ReSukiSU compatibility..."
+          if [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ] || [ "${{ inputs.ksu_variant }}" == "Next" ]; then
+            echo "Removing hooks.c and selinuxfs.c modifications from susfs patch..."
+            echo "  Reason: selinuxfs.c mods call security_*_with_policy() functions absent in GKI 6.12.38;"
+            echo "  ReSukiSU and KernelSU-Next both provide their own native selinux integration."
             sed -i '/^diff --git a\/security\/selinux\/hooks\.c b\/security\/selinux\/hooks\.c/,$d' 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
           fi
 
