@@ -766,7 +766,7 @@ jobs:
 
           # 3. Add Makefile entry (idempotent)
           grep -q 'CONFIG_ZEROMOUNT' fs/Makefile || \
-            echo 'obj-$(CONFIG_ZEROMOUNT)\t\t+= zeromount.o' >> fs/Makefile
+            printf 'obj-$(CONFIG_ZEROMOUNT)\t\t+= zeromount.o\n' >> fs/Makefile
           echo "  ✓ Makefile updated"
 
           # 4. Inject include + hooks per file (idempotent, anchor-based)

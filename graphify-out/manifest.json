@@ -1,0 +1,242 @@
+{
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\build-helpers\\fix-susfs-compat.sh": {
+    "mtime": 1780939378.567514,
+    "ast_hash": "109a6fe590cd99b940e4604469b531ac",
+    "semantic_hash": "109a6fe590cd99b940e4604469b531ac"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\data\\android12\\5.10.json": {
+    "mtime": 1780924395.4936526,
+    "ast_hash": "e3c89022a92048a9c4a0fbe87a557c43",
+    "semantic_hash": "e3c89022a92048a9c4a0fbe87a557c43"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\data\\android13\\5.15.json": {
+    "mtime": 1780924395.4946618,
+    "ast_hash": "1f0f47ebbe58dc31249c8ac93d63779f",
+    "semantic_hash": "1f0f47ebbe58dc31249c8ac93d63779f"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\data\\android14\\6.1.json": {
+    "mtime": 1780924395.4946618,
+    "ast_hash": "0a097b23d974124908a1309590daba5d",
+    "semantic_hash": "0a097b23d974124908a1309590daba5d"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\data\\android15\\6.6.json": {
+    "mtime": 1780924395.4956508,
+    "ast_hash": "860e6d3bb87359c1b58a7c43873349d9",
+    "semantic_hash": "860e6d3bb87359c1b58a7c43873349d9"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\data\\android16\\6.12.json": {
+    "mtime": 1780924395.4966502,
+    "ast_hash": "6c38466108365417d39c129b331f144e",
+    "semantic_hash": "6c38466108365417d39c129b331f144e"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\data\\announcement.json": {
+    "mtime": 1780924395.4966502,
+    "ast_hash": "3efeb729257e5bf1a6c0ebf04898c275",
+    "semantic_hash": "3efeb729257e5bf1a6c0ebf04898c275"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\hmbird_patch.c": {
+    "mtime": 1780924395.4966502,
+    "ast_hash": "d46df8101804f03b8378383941ddd81a",
+    "semantic_hash": "d46df8101804f03b8378383941ddd81a"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\scripts\\fetch_all.py": {
+    "mtime": 1780924395.4976497,
+    "ast_hash": "ec368ffb882010711ea2b75dec29e29f",
+    "semantic_hash": "ec368ffb882010711ea2b75dec29e29f"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\scripts\\gki_fetch.py": {
+    "mtime": 1780924395.4986496,
+    "ast_hash": "a4ceeb67284de7fac784c8ae89dacabc",
+    "semantic_hash": "a4ceeb67284de7fac784c8ae89dacabc"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\scripts\\update_data.py": {
+    "mtime": 1780924395.4986496,
+    "ast_hash": "fb33735fa99874c93b1b3daced6275d9",
+    "semantic_hash": "fb33735fa99874c93b1b3daced6275d9"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\scripts\\update_lts.py": {
+    "mtime": 1780924395.4996483,
+    "ast_hash": "b6138814a43533917a1b2d701f0c1298",
+    "semantic_hash": "b6138814a43533917a1b2d701f0c1298"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\src\\zeromount\\zeromount.c": {
+    "mtime": 1780941487.1025124,
+    "ast_hash": "9e683b6bec6993b8ac9c088a838095d6",
+    "semantic_hash": "9e683b6bec6993b8ac9c088a838095d6"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\src\\zeromount\\zeromount.h": {
+    "mtime": 1780941487.103513,
+    "ast_hash": "58e26b1e291e85dff7842e1838c6a957",
+    "semantic_hash": "58e26b1e291e85dff7842e1838c6a957"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\zram\\apply_lz4_neon.sh": {
+    "mtime": 1780924395.4996483,
+    "ast_hash": "56e2fc11a17b24b4300f92fb9bc0a592",
+    "semantic_hash": "56e2fc11a17b24b4300f92fb9bc0a592"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\zram\\include\\linux\\lz4.h": {
+    "mtime": 1780924395.500648,
+    "ast_hash": "f21e76101582a89820c6fc1aa553b2c9",
+    "semantic_hash": "f21e76101582a89820c6fc1aa553b2c9"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\zram\\lz4\\lz4.c": {
+    "mtime": 1780924395.5016475,
+    "ast_hash": "ec33c971ac3ae9ce74297d499d8cfb35",
+    "semantic_hash": "ec33c971ac3ae9ce74297d499d8cfb35"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\zram\\lz4\\lz4.h": {
+    "mtime": 1780924395.5026467,
+    "ast_hash": "fe19e1106d72aa35ab5df2236ac539f6",
+    "semantic_hash": "fe19e1106d72aa35ab5df2236ac539f6"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\zram\\lz4\\lz4armv8\\lz4accel.c": {
+    "mtime": 1780924395.5026467,
+    "ast_hash": "c5b9e285153f78750f1855f7e56cc96a",
+    "semantic_hash": "c5b9e285153f78750f1855f7e56cc96a"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\zram\\lz4\\lz4armv8\\lz4accel.h": {
+    "mtime": 1780924395.5036461,
+    "ast_hash": "f888e2dd9bb60fc492154c16ee2b27d1",
+    "semantic_hash": "f888e2dd9bb60fc492154c16ee2b27d1"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\zram\\lz4\\lz4hc.c": {
+    "mtime": 1780924395.5046456,
+    "ast_hash": "b5dcb844d3e7f307ba034a8c2a618d54",
+    "semantic_hash": "b5dcb844d3e7f307ba034a8c2a618d54"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\zram\\lz4\\lz4hc.h": {
+    "mtime": 1780924395.505645,
+    "ast_hash": "da1e9ac129bca2f653a767a334955ce0",
+    "semantic_hash": "da1e9ac129bca2f653a767a334955ce0"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\ISSUE_TEMPLATE\\bug_report.yml": {
+    "mtime": 1780924395.3553572,
+    "ast_hash": "da9fa02084ec8fe26b58eb5e343f68d0",
+    "semantic_hash": "da9fa02084ec8fe26b58eb5e343f68d0"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\ISSUE_TEMPLATE\\feature_request.yml": {
+    "mtime": 1780924395.3563662,
+    "ast_hash": "5959bfe21f61e2f221369afa47e74f35",
+    "semantic_hash": "5959bfe21f61e2f221369afa47e74f35"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\build.yml": {
+    "mtime": 1780943264.4678338,
+    "ast_hash": "6f4224ddf1c790f2c5215b3344b20b1b",
+    "semantic_hash": "6f4224ddf1c790f2c5215b3344b20b1b"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\emergency-cleanup.yml": {
+    "mtime": 1780924395.3573558,
+    "ast_hash": "ce47889c058f8a61fbeb17821427ad3d",
+    "semantic_hash": "ce47889c058f8a61fbeb17821427ad3d"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\get-manager.yml": {
+    "mtime": 1780924395.3583925,
+    "ast_hash": "13d451a6697203a3a1fa771f84b08734",
+    "semantic_hash": "13d451a6697203a3a1fa771f84b08734"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\kernel-a12-5-10.yml": {
+    "mtime": 1780924395.3583925,
+    "ast_hash": "a3e7cf23e67e88e299c7e1acb0f1c278",
+    "semantic_hash": "a3e7cf23e67e88e299c7e1acb0f1c278"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\kernel-a13-5-15.yml": {
+    "mtime": 1780924395.3583925,
+    "ast_hash": "684ad83c348065cb1a10d8567224c6cf",
+    "semantic_hash": "684ad83c348065cb1a10d8567224c6cf"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\kernel-a14-6-1.yml": {
+    "mtime": 1780924395.359405,
+    "ast_hash": "6ce9af5005079102773eea9a899dddbe",
+    "semantic_hash": "6ce9af5005079102773eea9a899dddbe"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\kernel-a15-6-6.yml": {
+    "mtime": 1780924395.359405,
+    "ast_hash": "ba952ea9089776887572dade712a27ff",
+    "semantic_hash": "ba952ea9089776887572dade712a27ff"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\kernel-a16-6-12.yml": {
+    "mtime": 1780924395.359405,
+    "ast_hash": "10652ce42c94d0b900749bbaf1322c77",
+    "semantic_hash": "10652ce42c94d0b900749bbaf1322c77"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\kernel-custom.yml": {
+    "mtime": 1780936424.2454941,
+    "ast_hash": "16b55a0005ad25b8a9e124ad731d1fa2",
+    "semantic_hash": "16b55a0005ad25b8a9e124ad731d1fa2"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\main.yml": {
+    "mtime": 1780924395.3604043,
+    "ast_hash": "535f3bb5a4e5bcd7cb9175f126c407af",
+    "semantic_hash": "535f3bb5a4e5bcd7cb9175f126c407af"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\send_bot_notice.yml": {
+    "mtime": 1780924395.3614037,
+    "ast_hash": "e216b6665378e66e31731ca709f5d792",
+    "semantic_hash": "e216b6665378e66e31731ca709f5d792"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\.github\\workflows\\update-pages.yml": {
+    "mtime": 1780924395.3614037,
+    "ast_hash": "d4c368319d8f38e491a1826dc840ff57",
+    "semantic_hash": "d4c368319d8f38e491a1826dc840ff57"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\BUILD_PIPELINE_SUCCESS_ANALYSIS.md": {
+    "mtime": 1780926404.7026124,
+    "ast_hash": "f1daa1b804c4b078db74eb1bce637440",
+    "semantic_hash": "f1daa1b804c4b078db74eb1bce637440"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\GKI_KERNELSU_SUSFS_ENGINEERING.md": {
+    "mtime": 1780924532.8347337,
+    "ast_hash": "53bc47a1ae50b43a2cac786c2e9cb99e",
+    "semantic_hash": "53bc47a1ae50b43a2cac786c2e9cb99e"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\KERNEL_BUILDER_INTEGRATION_PLAN.md": {
+    "mtime": 1780925652.9457777,
+    "ast_hash": "e12cf17ada2ee2a2400b8702b3c340a3",
+    "semantic_hash": "e12cf17ada2ee2a2400b8702b3c340a3"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\readme.md": {
+    "mtime": 1780924395.4976497,
+    "ast_hash": "68527dc6d8bcba32465830cfe7251a9d",
+    "semantic_hash": "68527dc6d8bcba32465830cfe7251a9d"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\assets\\action.png": {
+    "mtime": 1780924395.3640077,
+    "ast_hash": "c673437950eb34b3d24fffcef5457abc",
+    "semantic_hash": "c673437950eb34b3d24fffcef5457abc"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\assets\\release.png": {
+    "mtime": 1780924395.4889362,
+    "ast_hash": "ea50f0f83711d0dde4d14b6bad742058",
+    "semantic_hash": "ea50f0f83711d0dde4d14b6bad742058"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\assets\\sukisu_eg1.png": {
+    "mtime": 1780924395.4889362,
+    "ast_hash": "676f1a4afae53703ae334a514010453f",
+    "semantic_hash": "676f1a4afae53703ae334a514010453f"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\assets\\susfs_branch.png": {
+    "mtime": 1780924395.4906507,
+    "ast_hash": "3af948b333f4511ada37fcc404705fd5",
+    "semantic_hash": "3af948b333f4511ada37fcc404705fd5"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\assets\\susfs_commit.png": {
+    "mtime": 1780924395.4916637,
+    "ast_hash": "4f5a75f7a1c4f338a0d1917ae101eab1",
+    "semantic_hash": "4f5a75f7a1c4f338a0d1917ae101eab1"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\assets\\susfs_eg1.png": {
+    "mtime": 1780924395.4926631,
+    "ast_hash": "0afe300c5df4b6aeeddb0f7a78af26c2",
+    "semantic_hash": "0afe300c5df4b6aeeddb0f7a78af26c2"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\assets\\eg1.mp4": {
+    "mtime": 1780924395.402985,
+    "ast_hash": "e9a2b0a0bc1b06cc367175d77c242940",
+    "semantic_hash": "e9a2b0a0bc1b06cc367175d77c242940"
+  },
+  "C:\\PROJECT\\GKI_KernelSU_SUSFS\\assets\\eg2.mp4": {
+    "mtime": 1780924395.4879386,
+    "ast_hash": "1ffdc0c4bad5a23db332410d3f75949f",
+    "semantic_hash": "1ffdc0c4bad5a23db332410d3f75949f"
+  }
+}
