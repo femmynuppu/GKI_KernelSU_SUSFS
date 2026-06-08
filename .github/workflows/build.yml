@@ -828,14 +828,6 @@ jobs:
           if ! grep -q '<linux/zeromount.h>' fs/proc/base.c; then
             sed -i '/^#include "internal.h"$/i #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/proc/base.c
           fi
-          # Hook: do_proc_readlink() — before pathname = d_path(path, tmp, PAGE_SIZE);
-          if ! grep -q 'zeromount_get_static_vpath' fs/proc/base.c; then
-            printf '\n#ifdef CONFIG_ZEROMOUNT\n\tif (!zeromount_should_skip() \&\& path->dentry) {\n\t\tstruct inode *inode = d_backing_inode(path->dentry);\n\t\tif (inode) {\n\t\t\tchar *vpath = zeromount_get_static_vpath(inode);\n\t\t\tif (vpath) {\n\t\t\t\tint vlen = strlen(vpath);\n\t\t\t\tif (vlen > buflen)\n\t\t\t\t\tvlen = buflen;\n\t\t\t\tif (copy_to_user(buffer, vpath, vlen) == 0) {\n\t\t\t\t\tkfree(vpath);\n\t\t\t\t\tfree_page((unsigned long)tmp);\n\t\t\t\t\treturn vlen;\n\t\t\t\t}\n\t\t\t\tkfree(vpath);\n\t\t\t}\n\t\t}\n\t}\n#endif\n' > /tmp/zm_proc_base_hook
-            sed -i '/pathname = d_path(path, tmp, PAGE_SIZE);/{
-              r /tmp/zm_proc_base_hook
-            }' fs/proc/base.c 2>/dev/null || true
-            rm -f /tmp/zm_proc_base_hook
-          fi
           echo "  ✓ proc/base.c"
 
           # --- fs/proc/task_mmu.c (v2.1.0-only, simplified) ---
