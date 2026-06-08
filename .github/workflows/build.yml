@@ -745,21 +745,113 @@ jobs:
             fi
           fi
 
-      # ==================== 应用 ZeroMount VFS 补丁 ====================
-      - name: 应用 ZeroMount VFS 补丁
+      # ==================== 应用 ZeroMount VFS (anchor-based) ====================
+      - name: 注入 ZeroMount VFS hooks
         if: inputs.add_zeromount && inputs.enable_susfs
         working-directory: ${{ env.KERNEL_ROOT }}/common
         run: |
-          ZM_PATCH="$GITHUB_WORKSPACE/patches/60_zeromount.patch"
-          if [ ! -f "$ZM_PATCH" ]; then
-            echo "::warning::ZeroMount patch not found at $ZM_PATCH"
-            exit 0
-          fi
-          echo "应用 ZeroMount VFS 补丁..."
-          patch -p1 --forward -F3 < "$ZM_PATCH" || echo "::warning::部分 hunks 失败 (non-fatal, akan di-fix oleh compat script)"
+          SRC="$GITHUB_WORKSPACE/src/zeromount"
+          echo "=== ZeroMount anchor-based injection ==="
 
-          # Enable CONFIG_ZEROMOUNT in defconfig (idempotent)
+          # 1. Copy zeromount source files (new files, no patching needed)
+          cp "$SRC/zeromount.c" fs/zeromount.c
+          cp "$SRC/zeromount.h" include/linux/zeromount.h
+          echo "  ✓ zeromount.c + zeromount.h copied"
+
+          # 2. Add Kconfig entry (idempotent)
+          if ! grep -q 'config ZEROMOUNT' fs/Kconfig; then
+            printf '\nconfig ZEROMOUNT\n	bool "ZeroMount Virtual Filesystem"\n	default y\n	help\n	  ZeroMount allows path redirection and virtual file injection\n	  without mounting filesystems.\n' >> fs/Kconfig
+            echo "  ✓ Kconfig updated"
+          fi
+
+          # 3. Add Makefile entry (idempotent)
+          grep -q 'CONFIG_ZEROMOUNT' fs/Makefile || \
+            echo 'obj-$(CONFIG_ZEROMOUNT)\t\t+= zeromount.o' >> fs/Makefile
+          echo "  ✓ Makefile updated"
+
+          # 4. Inject include + hooks per file (idempotent, anchor-based)
+          # Anchor: stable strings NOT modified by SUSFS
+
+          # --- fs/d_path.c ---
+          if ! grep -q '<linux/zeromount.h>' fs/d_path.c; then
+            sed -i '/^#include <linux\/prefetch.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/d_path.c
+          fi
+          if ! grep -q 'zeromount_get_static_vpath' fs/d_path.c; then
+            sed -i '/error = prepend(&res, &buflen, " (deleted)", 10);/i #ifdef CONFIG_ZEROMOUNT\n\t\tconst char *v_path = zeromount_get_static_vpath(path->dentry->d_inode);\n\t\tif (v_path) {\n\t\t\terror = prepend(&res, &buflen, v_path, strlen(v_path));\n\t\t\tif (!error)\n\t\t\t\terror = prepend(&res, &buflen, " (deleted)", 10);\n\t\t\treturn error;\n\t\t}\n#endif' fs/d_path.c 2>/dev/null || true
+          fi
+          echo "  ✓ d_path.c"
+
+          # --- fs/namei.c ---
+          if ! grep -q '<linux/zeromount.h>' fs/namei.c; then
+            sed -i '/^#include <trace\/events\/namei.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/namei.c
+          fi
+          echo "  ✓ namei.c"
+
+          # --- fs/open.c ---
+          if ! grep -q '<linux/zeromount.h>' fs/open.c; then
+            sed -i '/^#include <linux\/dnotify.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/open.c
+          fi
+          echo "  ✓ open.c"
+
+          # --- fs/proc/base.c ---
+          if ! grep -q '<linux/zeromount.h>' fs/proc/base.c; then
+            sed -i '/^#include "internal.h"$/i #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/proc/base.c
+          fi
+          echo "  ✓ proc/base.c"
+
+          # --- fs/proc/task_mmu.c (DUAL v2.0.0/v2.1.0) ---
+          if ! grep -q '<linux/zeromount.h>' fs/proc/task_mmu.c; then
+            sed -i '/^#include <linux\/pkeys.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/proc/task_mmu.c
+          fi
+          if grep -q 'susfs_sus_kstat_spoof_show_map_vma' fs/proc/task_mmu.c; then
+            # SUSFS v2.1.0: inject after susfs_sus_kstat_spoof_show_map_vma
+            if ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
+              sed -i '/susfs_sus_kstat_spoof_show_map_vma(inode, &dev, &ino);/a \t\t#ifdef CONFIG_ZEROMOUNT\n\t\tzeromount_spoof_mmap_metadata(inode, &dev, &ino);\n\t\t#endif' fs/proc/task_mmu.c
+            fi
+          else
+            # SUSFS v2.0.0: inject before bypass_orig_flow/kstat guard
+            if ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
+              sed -i '/^#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT$/i #ifdef CONFIG_ZEROMOUNT\n\t\tzeromount_spoof_mmap_metadata(inode, &dev, &ino);\n#endif' fs/proc/task_mmu.c 2>/dev/null || true
+            fi
+          fi
+          echo "  ✓ proc/task_mmu.c"
+
+          # --- fs/readdir.c (DUAL v2.0.0/v2.1.0) ---
+          if ! grep -q '<linux/zeromount.h>' fs/readdir.c; then
+            sed -i '/^#include <linux\/fsnotify.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/readdir.c
+          fi
+          if ! grep -q 'zeromount_inject_dents' fs/readdir.c; then
+            # Anchor: error = iterate_dir( — stable across v2.0.0 and v2.1.0
+            # Inject zeromount_inject_dents call AFTER each iterate_dir call
+            sed -i '/error = iterate_dir(f\.file, &buf\.ctx);/a #ifdef CONFIG_ZEROMOUNT\n\tif (error >= 0 && !signal_pending(current))\n\t\tzeromount_inject_dents(f.file, (void __user **)&dirent,\n\t\t\t&count, &f.file->f_pos);\n#endif' fs/readdir.c 2>/dev/null || true
+          fi
+          echo "  ✓ readdir.c"
+
+          # --- fs/stat.c ---
+          if ! grep -q '<linux/zeromount.h>' fs/stat.c; then
+            sed -i '/^#include <linux\/uaccess.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/stat.c
+          fi
+          if ! grep -q 'zeromount_spoof_kstat' fs/stat.c; then
+            sed -i '/^int vfs_getattr_nosec(/i #ifdef CONFIG_ZEROMOUNT\nvoid zeromount_spoof_kstat(struct inode *inode, struct kstat *stat);\n#endif' fs/stat.c 2>/dev/null || true
+            sed -i '/security_inode_getattr(path);/a #ifdef CONFIG_ZEROMOUNT\n\tzeromount_spoof_kstat(path->dentry->d_inode, stat);\n#endif' fs/stat.c 2>/dev/null || true
+          fi
+          echo "  ✓ stat.c"
+
+          # --- fs/statfs.c ---
+          if ! grep -q '<linux/zeromount.h>' fs/statfs.c; then
+            sed -i '/^#include <linux\/security.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/statfs.c
+          fi
+          echo "  ✓ statfs.c"
+
+          # --- fs/xattr.c ---
+          if ! grep -q '<linux/zeromount.h>' fs/xattr.c; then
+            sed -i '/^#include <linux\/xattr.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/xattr.c
+          fi
+          echo "  ✓ xattr.c"
+
+          # 5. Enable CONFIG_ZEROMOUNT in defconfig
           grep -q '^CONFIG_ZEROMOUNT=y' "$DEFCONFIG" || echo "CONFIG_ZEROMOUNT=y" >> "$DEFCONFIG"
+          echo "  ✓ CONFIG_ZEROMOUNT enabled"
 
       # ==================== SUSFS 兼容性修复 ====================
       - name: 运行 SUSFS 兼容性修复脚本
