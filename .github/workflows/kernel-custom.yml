@@ -110,6 +110,11 @@ on:
         required: false
         type: boolean
         default: false
+      add_zeromount:
+        description: "启用 ZeroMount VFS 挂载隐藏"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-custom-kernel:
@@ -133,6 +138,7 @@ jobs:
       enable_susfs: ${{ !inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces || 'off' }}
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync || false }}
+      add_zeromount: ${{ inputs.add_zeromount || true }}
 
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml
