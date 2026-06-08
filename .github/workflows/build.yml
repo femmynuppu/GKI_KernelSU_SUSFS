@@ -757,16 +757,18 @@ jobs:
         if: inputs.add_zeromount && inputs.enable_susfs
         working-directory: ${{ env.KERNEL_ROOT }}/common
         run: |
-          ZM_PATCH="$GITHUB_WORKSPACE/patches/60_zeromount.patch"
-          if [ ! -f "$ZM_PATCH" ]; then
-            echo "::warning::ZeroMount 补丁不存在: $ZM_PATCH，跳过。"
+          echo "获取 NoMount/ZeroMount 补丁..."
+          # Clone nomount repo for nomount-susfs patches (designed for SUSFS coexistence)
+          git clone --depth 1 https://github.com/femmynuppu/nomount.git /tmp/nomount 2>/dev/null || true
+          NM_PATCH="/tmp/nomount/patches/nomount-susfs-kernel-${{ inputs.kernel_version }}.patch"
+          
+          if [ ! -f "$NM_PATCH" ]; then
+            echo "::warning::nomount-susfs patch not found for kernel ${{ inputs.kernel_version }}"
             exit 0
           fi
 
-          echo "应用 ZeroMount VFS 补丁..."
-          if ! patch -p1 --forward < "$ZM_PATCH"; then
-            echo "::warning::ZeroMount 补丁应用失败，可能已应用或上下文不匹配"
-          fi
+          echo "应用 nomount-susfs 补丁..."
+          patch -p1 --forward -F3 < "$NM_PATCH" || echo "::warning::补丁部分失败 (non-fatal)"
 
           # Post-patch: nomount.h include fallback for proc/base.c
           if grep -qF 'nomount' fs/proc/base.c && ! grep -qF '#include <linux/nomount.h>' fs/proc/base.c; then
