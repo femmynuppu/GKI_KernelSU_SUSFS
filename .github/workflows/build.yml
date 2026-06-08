@@ -788,9 +788,27 @@ jobs:
           fi
           echo "  ✓ d_path.c"
 
-          # --- fs/namei.c ---
+          # --- fs/namei.c (3 hooks: getname_flags, generic_permission, inode_permission) ---
           if ! grep -q '<linux/zeromount.h>' fs/namei.c; then
             sed -i '/^#include <trace\/events\/namei.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/namei.c
+          fi
+          # Hook A: getname_flags() — after audit_getname(result)
+          if ! grep -q 'zeromount_getname_hook' fs/namei.c; then
+            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (!IS_ERR(result)) {\n\t\tresult = zeromount_getname_hook(result);\n\t}\n#endif\n' > /tmp/zm_namei_getname
+            sed -i '/audit_getname(result);/r /tmp/zm_namei_getname' fs/namei.c
+            rm -f /tmp/zm_namei_getname
+          fi
+          # Hook B: generic_permission() — after int ret;
+          if ! grep -q 'zeromount_is_injected_file' fs/namei.c; then
+            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (zeromount_is_injected_file(inode)) {\n\t\tif (mask \& MAY_WRITE)\n\t\t\treturn -EACCES;\n\t\treturn 0;\n\t}\n\n\tif (S_ISDIR(inode->i_mode) \&\& zeromount_is_traversal_allowed(inode, mask)) {\n\t\treturn 0;\n\t}\n#endif\n' > /tmp/zm_namei_gperm
+            sed -i '/^int generic_permission(struct inode \*inode, int mask)$/,/^}$/{\n  /^[[:space:]]*int ret;$/\{\n    r /tmp/zm_namei_gperm\n  \}\n}' fs/namei.c 2>/dev/null || true
+            rm -f /tmp/zm_namei_gperm
+          fi
+          # Hook C: inode_permission() — after int retval;
+          if [ $(grep -c 'zeromount_is_injected_file' fs/namei.c) -lt 2 ]; then
+            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (zeromount_is_injected_file(inode)) {\n\t\tif (mask \& MAY_WRITE)\n\t\t\treturn -EACCES;\n\t\treturn 0;\n\t}\n\n\tif (S_ISDIR(inode->i_mode) \&\& zeromount_is_traversal_allowed(inode, mask)) {\n\t\treturn 0;\n\t}\n#endif\n' > /tmp/zm_namei_iperm
+            sed -i '/^int inode_permission(struct inode \*inode, int mask)$/,/^}$/{\n  /^[[:space:]]*int retval;$/\{\n    r /tmp/zm_namei_iperm\n  \}\n}' fs/namei.c 2>/dev/null || true
+            rm -f /tmp/zm_namei_iperm
           fi
           echo "  ✓ namei.c"
 
@@ -798,11 +816,25 @@ jobs:
           if ! grep -q '<linux/zeromount.h>' fs/open.c; then
             sed -i '/^#include <linux\/dnotify.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/open.c
           fi
+          # Hook: do_sys_openat2() — after tmp = getname(filename)
+          if ! grep -q 'zeromount_getname_hook' fs/open.c; then
+            printf '#ifdef CONFIG_ZEROMOUNT\n\ttmp = zeromount_getname_hook(tmp);\n#endif\n' > /tmp/zm_open_hook
+            sed -i '/tmp = getname(filename);/r /tmp/zm_open_hook' fs/open.c
+            rm -f /tmp/zm_open_hook
+          fi
           echo "  ✓ open.c"
 
           # --- fs/proc/base.c ---
           if ! grep -q '<linux/zeromount.h>' fs/proc/base.c; then
             sed -i '/^#include "internal.h"$/i #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/proc/base.c
+          fi
+          # Hook: do_proc_readlink() — before pathname = d_path(path, tmp, PAGE_SIZE);
+          if ! grep -q 'zeromount_get_static_vpath' fs/proc/base.c; then
+            printf '\n#ifdef CONFIG_ZEROMOUNT\n\tif (!zeromount_should_skip() \&\& path->dentry) {\n\t\tstruct inode *inode = d_backing_inode(path->dentry);\n\t\tif (inode) {\n\t\t\tchar *vpath = zeromount_get_static_vpath(inode);\n\t\t\tif (vpath) {\n\t\t\t\tint vlen = strlen(vpath);\n\t\t\t\tif (vlen > buflen)\n\t\t\t\t\tvlen = buflen;\n\t\t\t\tif (copy_to_user(buffer, vpath, vlen) == 0) {\n\t\t\t\t\tkfree(vpath);\n\t\t\t\t\tfree_page((unsigned long)tmp);\n\t\t\t\t\treturn vlen;\n\t\t\t\t}\n\t\t\t\tkfree(vpath);\n\t\t\t}\n\t\t}\n\t}\n#endif\n' > /tmp/zm_proc_base_hook
+            sed -i '/pathname = d_path(path, tmp, PAGE_SIZE);/{
+              r /tmp/zm_proc_base_hook
+            }' fs/proc/base.c
+            rm -f /tmp/zm_proc_base_hook
           fi
           echo "  ✓ proc/base.c"
 
@@ -834,17 +866,52 @@ jobs:
           if ! grep -q '<linux/zeromount.h>' fs/stat.c; then
             sed -i '/^#include <linux\/uaccess.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/stat.c
           fi
+          # Hook: vfs_statx() — static helper before function + call inside
+          if ! grep -q 'zeromount_stat_hook' fs/stat.c; then
+            printf '#ifdef CONFIG_ZEROMOUNT\nstatic inline int zeromount_stat_hook(int dfd, const char __user *filename,\n                                      struct kstat *stat, unsigned int request_mask,\n                                      int flags) {\n    if (zm_is_recursive() || IS_ERR_OR_NULL(filename)) return -ENOENT;\n    if (filename) {\n        char kname[NAME_MAX + 1];\n        long copied = strncpy_from_user(kname, filename, sizeof(kname));\n        if (copied > 0 \&\& kname[0] != '"'"'/'\"'\"') {\n            char *abs_path = zeromount_build_absolute_path(dfd, kname);\n            if (abs_path) {\n                char *resolved = zeromount_resolve_path(abs_path);\n                if (resolved) {\n                    struct path zm_path;\n                    int zm_ret;\n                    zm_enter();\n                    zm_ret = kern_path(resolved, (flags \& AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW, \&zm_path);\n                    zm_exit();\n                    kfree(resolved);\n                    kfree(abs_path);\n                    if (zm_ret == 0) {\n                        zm_ret = vfs_getattr(\&zm_path, stat, request_mask,\n                                             (flags \& AT_SYMLINK_NOFOLLOW) ? AT_SYMLINK_NOFOLLOW : 0);\n                        path_put(\&zm_path);\n                        return zm_ret;\n                    }\n                } else {\n                    kfree(abs_path);\n                }\n            }\n        }\n    }\n    return -ENOENT;\n}\n#endif\n' > /tmp/zm_stat_helper
+            sed -i '/^static int vfs_statx(int dfd, const char __user \*filename, int flags,$/{
+              r /tmp/zm_stat_helper
+            }' fs/stat.c
+            rm -f /tmp/zm_stat_helper
+            # Now inject the call inside vfs_statx, after int error;
+            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (filename) {\n\t\tint zm_ret = zeromount_stat_hook(dfd, filename, stat, request_mask, flags);\n\t\tif (zm_ret != -ENOENT)\n\t\t\treturn zm_ret;\n\t}\n#endif\n' > /tmp/zm_stat_call
+            sed -i '/^static int vfs_statx(int dfd, const char __user \*filename, int flags,$/,/^}$/{
+              /^[[:space:]]*int error;$/\{\n                r /tmp/zm_stat_call\n              \}
+            }' fs/stat.c 2>/dev/null || true
+            rm -f /tmp/zm_stat_call
+          fi
           echo "  ✓ stat.c"
 
           # --- fs/statfs.c ---
           if ! grep -q '<linux/zeromount.h>' fs/statfs.c; then
             sed -i '/^#include <linux\/security.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/statfs.c
           fi
+          # Hook: user_statfs() — after vfs_statfs(&path, st);
+          if ! grep -q 'zeromount_spoof_statfs' fs/statfs.c; then
+            printf '#ifdef CONFIG_ZEROMOUNT\n\t\tint spoofed;\n#endif\n\t\terror = vfs_statfs(\&path, st);\n#ifdef CONFIG_ZEROMOUNT\n\t\tspoofed = zeromount_spoof_statfs(pathname, st);\n\t\t(void)spoofed;\n#endif\n' > /tmp/zm_statfs_hook
+            # Anchor: error = user_path_at( — unique, before the statfs call
+            # We replace the error=vfs_statfs line with the full block
+            # Actually simpler: inject after retry: label and error = user_path_at block
+            # Use anchor: error = vfs_statfs(\&path, st);
+            sed -i '/^[[:space:]]*error = vfs_statfs(\&path, st);$/{
+              r /tmp/zm_statfs_hook
+              d
+            }' fs/statfs.c 2>/dev/null || true
+            rm -f /tmp/zm_statfs_hook
+          fi
           echo "  ✓ statfs.c"
 
           # --- fs/xattr.c ---
           if ! grep -q '<linux/zeromount.h>' fs/xattr.c; then
             sed -i '/^#include <linux\/xattr.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/xattr.c
+          fi
+          # Hook: vfs_getxattr() — at function entry, before __vfs_getxattr
+          if ! grep -q 'zeromount_spoof_xattr' fs/xattr.c; then
+            printf '#ifdef CONFIG_ZEROMOUNT\n\tssize_t zm_ret;\n\tzm_ret = zeromount_spoof_xattr(dentry, name, value, size);\n\tif (zm_ret != -EOPNOTSUPP)\n\t\treturn zm_ret;\n#endif\n' > /tmp/zm_xattr_hook
+            sed -i '/^vfs_getxattr(struct dentry \*dentry, const char \*name, void \*value, size_t size)$/,/^}$/{
+              /^{$/\{\n                r /tmp/zm_xattr_hook\n              \}
+            }' fs/xattr.c 2>/dev/null || true
+            rm -f /tmp/zm_xattr_hook
           fi
           echo "  ✓ xattr.c"
 
