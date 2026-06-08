@@ -866,20 +866,6 @@ jobs:
           if ! grep -q '<linux/zeromount.h>' fs/stat.c; then
             sed -i '/^#include <linux\/uaccess.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/stat.c
           fi
-          # Hook: vfs_statx() — static helper before function + call inside
-          if ! grep -q 'zeromount_stat_hook' fs/stat.c; then
-            printf '#ifdef CONFIG_ZEROMOUNT\nstatic inline int zeromount_stat_hook(int dfd, const char __user *filename,\n                                      struct kstat *stat, unsigned int request_mask,\n                                      int flags) {\n    if (zm_is_recursive() || IS_ERR_OR_NULL(filename)) return -ENOENT;\n    if (filename) {\n        char kname[NAME_MAX + 1];\n        long copied = strncpy_from_user(kname, filename, sizeof(kname));\n        if (copied > 0 \&\& kname[0] != '"'"'/'\"'\"') {\n            char *abs_path = zeromount_build_absolute_path(dfd, kname);\n            if (abs_path) {\n                char *resolved = zeromount_resolve_path(abs_path);\n                if (resolved) {\n                    struct path zm_path;\n                    int zm_ret;\n                    zm_enter();\n                    zm_ret = kern_path(resolved, (flags \& AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW, \&zm_path);\n                    zm_exit();\n                    kfree(resolved);\n                    kfree(abs_path);\n                    if (zm_ret == 0) {\n                        zm_ret = vfs_getattr(\&zm_path, stat, request_mask,\n                                             (flags \& AT_SYMLINK_NOFOLLOW) ? AT_SYMLINK_NOFOLLOW : 0);\n                        path_put(\&zm_path);\n                        return zm_ret;\n                    }\n                } else {\n                    kfree(abs_path);\n                }\n            }\n        }\n    }\n    return -ENOENT;\n}\n#endif\n' > /tmp/zm_stat_helper
-            sed -i '/^static int vfs_statx(int dfd, const char __user \*filename, int flags,$/{
-              r /tmp/zm_stat_helper
-            }' fs/stat.c 2>/dev/null || true
-            rm -f /tmp/zm_stat_helper
-            # Now inject the call inside vfs_statx, after int error;
-            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (filename) {\n\t\tint zm_ret = zeromount_stat_hook(dfd, filename, stat, request_mask, flags);\n\t\tif (zm_ret != -ENOENT)\n\t\t\treturn zm_ret;\n\t}\n#endif\n' > /tmp/zm_stat_call
-            sed -i '/^static int vfs_statx(int dfd, const char __user \*filename, int flags,$/,/^}$/{
-              /^[[:space:]]*int error;$/\{\n                r /tmp/zm_stat_call\n              \}
-            }' fs/stat.c 2>/dev/null || true
-            rm -f /tmp/zm_stat_call
-          fi
           echo "  ✓ stat.c"
 
           # --- fs/statfs.c ---
