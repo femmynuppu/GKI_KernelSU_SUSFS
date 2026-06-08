@@ -834,10 +834,6 @@ jobs:
           if ! grep -q '<linux/zeromount.h>' fs/stat.c; then
             sed -i '/^#include <linux\/uaccess.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/stat.c
           fi
-          if ! grep -q 'zeromount_spoof_kstat' fs/stat.c; then
-            sed -i '/^int vfs_getattr_nosec(/i #ifdef CONFIG_ZEROMOUNT\nvoid zeromount_spoof_kstat(struct inode *inode, struct kstat *stat);\n#endif' fs/stat.c 2>/dev/null || true
-            sed -i '/security_inode_getattr(path);/a #ifdef CONFIG_ZEROMOUNT\n\tzeromount_spoof_kstat(path->dentry->d_inode, stat);\n#endif' fs/stat.c 2>/dev/null || true
-          fi
           echo "  ✓ stat.c"
 
           # --- fs/statfs.c ---
