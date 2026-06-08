@@ -120,6 +120,7 @@ jobs:
           echo "Re-Kernel     : ${{ inputs.use_rekernel }}"
           echo "Droidspaces   : ${{ inputs.droidspaces }}"
           echo "NTSync        : ${{ inputs.droidspaces_ntsync }}"
+          echo "ZeroMount     : ${{ inputs.add_zeromount }}"
           echo "Stock Config  : 自动检测 config/stock_defconfig"
           echo "========================================"
 
@@ -448,6 +449,21 @@ jobs:
           else
             echo "KSU_LATEST_COMMIT_DATE=未知" >> $GITHUB_ENV
           fi
+
+      # ==================== 预检查：合并冲突标记 ====================
+      - name: 预检查合并冲突标记
+        if: always()
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          echo "扫描残留合并冲突标记..."
+          CONFLICT_FILES=$(grep -rnlE '^<<<<<<< |^>>>>>>> ' common/ 2>/dev/null | grep -vE '\.(md|rst|txt|py|html)$' || true)
+          if [ -n "$CONFLICT_FILES" ]; then
+            echo "::error::检测到合并冲突标记残留！以下文件存在未解决的冲突:"
+            echo "$CONFLICT_FILES" | head -20
+            echo "::error::请先解决所有合并冲突再运行构建。"
+            exit 1
+          fi
+          echo "未检测到合并冲突标记，继续。"
 
       # ==================== 应用 SUSFS 补丁 ====================
       # SUSFS (Super User SUS FileSystem) 用于隐藏 root 痕迹
@@ -1194,6 +1210,20 @@ jobs:
           fi
 
           sed -i 's/check_defconfig//' ./common/build.config.gki
+
+      # ==================== 添加 TCP BBR 拥塞控制 ====================
+      - name: 添加 TCP BBR 配置
+        run: |
+          if ! grep -q '^CONFIG_TCP_CONG_BBR=y' "$DEFCONFIG"; then
+            cat >> "$DEFCONFIG" << 'EOF'
+          CONFIG_TCP_CONG_BBR=y
+          CONFIG_DEFAULT_TCP_CONG="bbr"
+          CONFIG_NET_SCH_FQ=y
+          EOF
+            echo "已启用 TCP BBR 拥塞控制"
+          else
+            echo "TCP BBR 已启用，跳过。"
+          fi
 
       # ==================== 添加 SUSFS 配置 ====================
       # 启用 SUSFS 各项隐藏功能
