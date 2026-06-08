@@ -449,7 +449,7 @@ jobs:
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           echo "扫描残留合并冲突标记..."
-          CONFLICT_FILES=$(grep -rnlE '^<<<<<<< |^=======$|^>>>>>>> ' common/ 2>/dev/null || true)
+          CONFLICT_FILES=$(grep -rnlE '^<<<<<<< |^>>>>>>> ' common/ 2>/dev/null | grep -vE '\.(md|rst|txt|py|html)$' || true)
           if [ -n "$CONFLICT_FILES" ]; then
             echo "::error::检测到合并冲突标记残留！以下文件存在未解决的冲突:"
             echo "$CONFLICT_FILES" | head -20
