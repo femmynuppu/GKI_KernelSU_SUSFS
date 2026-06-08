@@ -750,20 +750,26 @@ jobs:
         if: inputs.add_zeromount && inputs.enable_susfs
         working-directory: ${{ env.KERNEL_ROOT }}/common
         run: |
-          echo "获取 NoMount/ZeroMount 补丁..."
-          git clone --depth 1 https://github.com/femmynuppu/nomount.git /tmp/nomount 2>/dev/null || true
-          NM_PATCH="/tmp/nomount/patches/nomount-susfs-kernel-${{ inputs.kernel_version }}.patch"
-          if [ -f "$NM_PATCH" ]; then
-            patch -p1 --forward -F3 < "$NM_PATCH" || echo "::warning::补丁部分失败 (non-fatal)"
-            # Post-patch include fallback
-            for f in fs/proc/base.c fs/proc/task_mmu.c; do
-              if [ -f "$f" ] && ! grep -qF '<linux/nomount.h>' "$f"; then
-                sed -i '/^#include "internal.h"$/a #ifdef CONFIG_NOMOUNT\\n#include <linux/nomount.h>\\n#endif' "$f" 2>/dev/null || true
-              fi
-            done
-            grep -q '^CONFIG_NOMOUNT=y' "$DEFCONFIG" || echo "CONFIG_NOMOUNT=y" >> "$DEFCONFIG"
+          ZM_PATCH="$GITHUB_WORKSPACE/patches/60_zeromount.patch"
+          if [ ! -f "$ZM_PATCH" ]; then
+            echo "::warning::ZeroMount patch not found at $ZM_PATCH"
+            exit 0
+          fi
+          echo "应用 ZeroMount VFS 补丁..."
+          patch -p1 --forward -F3 < "$ZM_PATCH" || echo "::warning::部分 hunks 失败 (non-fatal, akan di-fix oleh compat script)"
+
+          # Enable CONFIG_ZEROMOUNT in defconfig (idempotent)
+          grep -q '^CONFIG_ZEROMOUNT=y' "$DEFCONFIG" || echo "CONFIG_ZEROMOUNT=y" >> "$DEFCONFIG"
+
+      # ==================== SUSFS 兼容性修复 ====================
+      - name: 运行 SUSFS 兼容性修复脚本
+        if: inputs.enable_susfs
+        run: |
+          FIX_SCRIPT="$GITHUB_WORKSPACE/build-helpers/fix-susfs-compat.sh"
+          if [ -f "$FIX_SCRIPT" ]; then
+            bash "$FIX_SCRIPT" "$KERNEL_ROOT/common" "${{ inputs.sub_level }}" "${{ inputs.android_version }}" "${{ inputs.kernel_version }}" "$KERNEL_PATCHES"
           else
-            echo "::warning::nomount-susfs patch not found for kernel ${{ inputs.kernel_version }}"
+            echo "::warning::fix-susfs-compat.sh not found, skipping"
           fi
 
       - name: 克隆 Droidspaces 补丁仓库
