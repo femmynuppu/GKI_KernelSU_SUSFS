@@ -81,10 +81,6 @@ on:
         required: false
         type: boolean
         default: false
-      add_zeromount:
-        required: false
-        type: boolean
-        default: true
 
 jobs:
   build-kernel:
@@ -120,7 +116,6 @@ jobs:
           echo "Re-Kernel     : ${{ inputs.use_rekernel }}"
           echo "Droidspaces   : ${{ inputs.droidspaces }}"
           echo "NTSync        : ${{ inputs.droidspaces_ntsync }}"
-          echo "ZeroMount     : ${{ inputs.add_zeromount }}"
           echo "Stock Config  : 自动检测 config/stock_defconfig"
           echo "========================================"
 
@@ -442,22 +437,6 @@ jobs:
             echo "KSU_LATEST_COMMIT_DATE=未知" >> $GITHUB_ENV
           fi
 
-      # ==================== 预检查：合并冲突标记 ====================
-      # 在任何补丁应用前检测残留的冲突标记，及早中止避免污染
-      - name: 预检查合并冲突标记
-        if: always()
-        working-directory: ${{ env.KERNEL_ROOT }}
-        run: |
-          echo "扫描残留合并冲突标记..."
-          CONFLICT_FILES=$(grep -rnlE '^<<<<<<< |^>>>>>>> ' common/ 2>/dev/null | grep -vE '\.(md|rst|txt|py|html)$' || true)
-          if [ -n "$CONFLICT_FILES" ]; then
-            echo "::error::检测到合并冲突标记残留！以下文件存在未解决的冲突:"
-            echo "$CONFLICT_FILES" | head -20
-            echo "::error::请先解决所有合并冲突再运行构建。"
-            exit 1
-          fi
-          echo "未检测到合并冲突标记，继续。"
-
       # ==================== 应用 SUSFS 补丁 ====================
       # SUSFS (Super User SUS FileSystem) 用于隐藏 root 痕迹
       - name: 应用 SUSFS 补丁
@@ -567,19 +546,6 @@ jobs:
               echo "临时调整 Android 16 6.12 exec.c 上下文"
               sed -i '/^#include <linux\/dma-buf.h>$/d' fs/exec.c
             fi
-          fi
-
-          # user_path_at_empty() SUSFS hook - inject susfs_is_path_hidden() call
-          # This hook prevents path-based detection bypass by checking hidden paths early
-          if grep -qF 'user_path_at_empty' fs/namei.c; then
-            if ! grep -qF 'susfs_is_path_hidden' fs/namei.c; then
-              echo "Injecting susfs_is_path_hidden() hook into user_path_at_empty()..."
-              perl -i -pe 'if (/^int user_path_at_empty\(/ ... /^{/ and /^{/) { $_ .= "\tsusfs_is_path_hidden(\&dfd, \&name);\n"; }' fs/namei.c
-            else
-              echo "user_path_at_empty() SUSFS hook already present, skipping."
-            fi
-          else
-            echo "WARNING: user_path_at_empty() not found in fs/namei.c, skipping hook."
           fi
 
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
@@ -749,51 +715,6 @@ jobs:
                 echo "已修复 exec.c 缺少 susfs_def.h 问题"
               fi
             fi
-          fi
-
-      # ==================== 应用 ZeroMount VFS 补丁 ====================
-      # ZeroMount 通过 VFS 层级实现更彻底的挂载隐藏
-      - name: 应用 ZeroMount VFS 补丁
-        if: inputs.add_zeromount && inputs.enable_susfs
-        working-directory: ${{ env.KERNEL_ROOT }}/common
-        run: |
-          echo "获取 NoMount/ZeroMount 补丁..."
-          # Clone nomount repo for nomount-susfs patches (designed for SUSFS coexistence)
-          git clone --depth 1 https://github.com/femmynuppu/nomount.git /tmp/nomount 2>/dev/null || true
-          NM_PATCH="/tmp/nomount/patches/nomount-susfs-kernel-${{ inputs.kernel_version }}.patch"
-          
-          if [ ! -f "$NM_PATCH" ]; then
-            echo "::warning::nomount-susfs patch not found for kernel ${{ inputs.kernel_version }}"
-            exit 0
-          fi
-
-          echo "应用 nomount-susfs 补丁..."
-          patch -p1 --forward -F3 < "$NM_PATCH" || echo "::warning::补丁部分失败 (non-fatal)"
-
-          # Post-patch: nomount.h include fallback for proc/base.c
-          if grep -qF 'nomount' fs/proc/base.c && ! grep -qF '#include <linux/nomount.h>' fs/proc/base.c; then
-            if grep -qF '#include <linux/susfs_def.h>' fs/proc/base.c; then
-              sed -i '/#include <linux\/susfs_def.h>/a #include <linux/nomount.h>' fs/proc/base.c
-            elif grep -qF '#include <linux/dma-buf.h>' fs/proc/base.c; then
-              sed -i '/#include <linux\/dma-buf.h>/a #include <linux/nomount.h>' fs/proc/base.c
-            else
-              sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux/nomount.h>' fs/proc/base.c
-            fi
-            echo "已为 proc/base.c 添加 nomount.h include"
-          fi
-
-          # Post-patch: nomount.h include fallback for task_mmu.c
-          if grep -qF 'nomount' fs/proc/task_mmu.c && ! grep -qF '#include <linux/nomount.h>' fs/proc/task_mmu.c; then
-            sed -i '0,/^#include /s//#include <linux\/nomount.h>\n&/' fs/proc/task_mmu.c
-            echo "已为 task_mmu.c 添加 nomount.h include"
-          fi
-
-          # Enable CONFIG_NOMOUNT in defconfig (idempotent)
-          if ! grep -q '^CONFIG_NOMOUNT=y' "$DEFCONFIG"; then
-            echo "CONFIG_NOMOUNT=y" >> "$DEFCONFIG"
-            echo "已启用 CONFIG_NOMOUNT"
-          else
-            echo "CONFIG_NOMOUNT 已启用，跳过。"
           fi
 
       - name: 克隆 Droidspaces 补丁仓库
@@ -1240,20 +1161,6 @@ jobs:
           fi
 
           sed -i 's/check_defconfig//' ./common/build.config.gki
-
-          # TCP BBR 拥塞控制算法 - 提升网络吞吐性能
-          if ! grep -q '^CONFIG_TCP_CONG_BBR=y' "$DEFCONFIG"; then
-            {
-              echo "CONFIG_TCP_CONG_BBR=y"
-              echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\""
-            } >> "$DEFCONFIG"
-            echo "已启用 TCP BBR 拥塞控制"
-          else
-            echo "TCP BBR 已启用，跳过。"
-          fi
-          if ! grep -q '^CONFIG_NET_SCH_FQ=y' "$DEFCONFIG"; then
-            echo "CONFIG_NET_SCH_FQ=y" >> "$DEFCONFIG"
-          fi
 
       # ==================== 添加 SUSFS 配置 ====================
       # 启用 SUSFS 各项隐藏功能
