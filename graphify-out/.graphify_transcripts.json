@@ -1,0 +1,3 @@
+  warning: could not transcribe C:\PROJECT\GKI_KernelSU_SUSFS\assets\eg1.mp4: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe C:\PROJECT\GKI_KernelSU_SUSFS\assets\eg2.mp4: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+[]

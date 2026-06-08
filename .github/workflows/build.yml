@@ -777,7 +777,9 @@ jobs:
             sed -i '/^#include <linux\/prefetch.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/d_path.c
           fi
           if ! grep -q 'zeromount_get_static_vpath' fs/d_path.c; then
-            sed -i '/error = prepend(&res, &buflen, " (deleted)", 10);/i #ifdef CONFIG_ZEROMOUNT\n\t\tconst char *v_path = zeromount_get_static_vpath(path->dentry->d_inode);\n\t\tif (v_path) {\n\t\t\terror = prepend(&res, &buflen, v_path, strlen(v_path));\n\t\t\tif (!error)\n\t\t\t\terror = prepend(&res, &buflen, " (deleted)", 10);\n\t\t\treturn error;\n\t\t}\n#endif' fs/d_path.c 2>/dev/null || true
+            printf '#ifdef CONFIG_ZEROMOUNT\n\t\tconst char *v_path = zeromount_get_static_vpath(path->dentry->d_inode);\n\t\tif (v_path) {\n\t\t\terror = prepend(&res, &buflen, v_path, strlen(v_path));\n\t\t\tif (!error)\n\t\t\t\terror = prepend(&res, &buflen, " (deleted)", 10);\n\t\t\treturn error;\n\t\t}\n#endif\n' > /tmp/zm_dpath_hook
+            sed -i '/if (dentry == vfsmnt/r /tmp/zm_dpath_hook' fs/d_path.c 2>/dev/null || true
+            rm -f /tmp/zm_dpath_hook
           fi
           echo "  ✓ d_path.c"
 
@@ -799,20 +801,15 @@ jobs:
           fi
           echo "  ✓ proc/base.c"
 
-          # --- fs/proc/task_mmu.c (DUAL v2.0.0/v2.1.0) ---
+          # --- fs/proc/task_mmu.c (v2.1.0-only, simplified) ---
           if ! grep -q '<linux/zeromount.h>' fs/proc/task_mmu.c; then
             sed -i '/^#include <linux\/pkeys.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/proc/task_mmu.c
           fi
-          if grep -q 'susfs_sus_kstat_spoof_show_map_vma' fs/proc/task_mmu.c; then
-            # SUSFS v2.1.0: inject after susfs_sus_kstat_spoof_show_map_vma
-            if ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
-              sed -i '/susfs_sus_kstat_spoof_show_map_vma(inode, &dev, &ino);/a \t\t#ifdef CONFIG_ZEROMOUNT\n\t\tzeromount_spoof_mmap_metadata(inode, &dev, &ino);\n\t\t#endif' fs/proc/task_mmu.c
-            fi
-          else
-            # SUSFS v2.0.0: inject before bypass_orig_flow/kstat guard
-            if ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
-              sed -i '/^#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT$/i #ifdef CONFIG_ZEROMOUNT\n\t\tzeromount_spoof_mmap_metadata(inode, &dev, &ino);\n#endif' fs/proc/task_mmu.c 2>/dev/null || true
-            fi
+          if ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
+            # Write injection block to temp file, use sed 'r' to insert
+            printf '\t\t#ifdef CONFIG_ZEROMOUNT\n\t\tzeromount_spoof_mmap_metadata(inode, &dev, &ino);\n\t\t#endif\n' > /tmp/zm_task_mmu_hook
+            sed -i '/susfs_sus_kstat_spoof_show_map_vma(inode, &dev, &ino);/r /tmp/zm_task_mmu_hook' fs/proc/task_mmu.c
+            rm -f /tmp/zm_task_mmu_hook
           fi
           echo "  ✓ proc/task_mmu.c"
 
@@ -822,8 +819,9 @@ jobs:
           fi
           if ! grep -q 'zeromount_inject_dents' fs/readdir.c; then
             # Anchor: error = iterate_dir( — stable across v2.0.0 and v2.1.0
-            # Inject zeromount_inject_dents call AFTER each iterate_dir call
-            sed -i '/error = iterate_dir(f\.file, &buf\.ctx);/a #ifdef CONFIG_ZEROMOUNT\n\tif (error >= 0 && !signal_pending(current))\n\t\tzeromount_inject_dents(f.file, (void __user **)&dirent,\n\t\t\t&count, &f.file->f_pos);\n#endif' fs/readdir.c 2>/dev/null || true
+            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (error >= 0 && !signal_pending(current))\n\t\tzeromount_inject_dents(f.file, (void __user **)&dirent,\n\t\t\t&count, &f.file->f_pos);\n#endif\n' > /tmp/zm_readdir_hook
+            sed -i '/error = iterate_dir(f\.file, &buf\.ctx);/r /tmp/zm_readdir_hook' fs/readdir.c
+            rm -f /tmp/zm_readdir_hook
           fi
           echo "  ✓ readdir.c"
 
