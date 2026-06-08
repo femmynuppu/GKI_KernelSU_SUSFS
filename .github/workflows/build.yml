@@ -777,8 +777,13 @@ jobs:
             sed -i '/^#include <linux\/prefetch.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/d_path.c
           fi
           if ! grep -q 'zeromount_get_static_vpath' fs/d_path.c; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\t\tconst char *v_path = zeromount_get_static_vpath(path->dentry->d_inode);\n\t\tif (v_path) {\n\t\t\terror = prepend(&res, &buflen, v_path, strlen(v_path));\n\t\t\tif (!error)\n\t\t\t\terror = prepend(&res, &buflen, " (deleted)", 10);\n\t\t\treturn error;\n\t\t}\n#endif\n' > /tmp/zm_dpath_hook
-            sed -i '/if (dentry == vfsmnt/r /tmp/zm_dpath_hook' fs/d_path.c 2>/dev/null || true
+            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (path->dentry && d_backing_inode(path->dentry)) {\n\t\tchar *v_path = zeromount_get_static_vpath(d_backing_inode(path->dentry));\n\t\tif (v_path) {\n\t\t\tint len = strlen(v_path);\n\t\t\tif (buflen < len + 1) {\n\t\t\t\tkfree(v_path);\n\t\t\t\treturn ERR_PTR(-ENAMETOOLONG);\n\t\t\t}\n\t\t\t*--res = '"'"'\\0'"'"';\n\t\t\tres -= len;\n\t\t\tmemcpy(res, v_path, len);\n\t\t\tkfree(v_path);\n\t\t\treturn res;\n\t\t}\n\t}\n#endif\n' > /tmp/zm_dpath_hook
+            # Anchor: inject AFTER 'int error;' inside d_path() — matches 60_zeromount.patch line 43-62
+            sed -i '/^char \*d_path(const struct path \*path, char \*buf, int buflen)$/,/^}$/{
+              /^[[:space:]]*int error;$/{
+                r /tmp/zm_dpath_hook
+              }
+            }' fs/d_path.c 2>/dev/null || true
             rm -f /tmp/zm_dpath_hook
           fi
           echo "  ✓ d_path.c"
@@ -855,7 +860,7 @@ jobs:
       - name: 运行 SUSFS 兼容性修复脚本
         if: inputs.enable_susfs
         run: |
-          FIX_SCRIPT="$GITHUB_WORKSPACE/build-helpers/fix-susfs-compat.sh"
+          FIX_SCRIPT="${{ github.workspace }}/build-helpers/fix-susfs-compat.sh"
           if [ -f "$FIX_SCRIPT" ]; then
             bash "$FIX_SCRIPT" "$KERNEL_ROOT/common" "${{ inputs.sub_level }}" "${{ inputs.android_version }}" "${{ inputs.kernel_version }}" "$KERNEL_PATCHES"
           else
