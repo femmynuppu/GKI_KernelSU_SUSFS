@@ -81,6 +81,10 @@ on:
         required: false
         type: boolean
         default: false
+      add_zeromount:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-kernel:
@@ -723,18 +727,6 @@ jobs:
                 echo "已修复 exec.c 缺少 susfs_def.h 问题"
               fi
             fi
-          fi
-
-      # ==================== user_path_at_empty() SUSFS hook ====================
-      # Menutup kebocoran faccessat2 + 15+ syscall via satu titik di fs/namei.c
-      - name: 注入 user_path_at_empty hook
-        working-directory: ${{ env.KERNEL_ROOT }}/common
-        run: |
-          if ! grep -q 'susfs_is_path_hidden' fs/namei.c; then
-            echo "注入 user_path_at_empty() hook ke fs/namei.c..."
-            perl -i -pe 's/^(int user_path_at_empty\(.*)$/\n#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n\tif (name && !susfs_is_ksu_domain()) {\n\t\tchar __buf[128];\n\t\tlong __len = strncpy_from_user(__buf, name, sizeof(__buf)-1);\n\t\tif (__len > 0) {\n\t\t\t__buf[__len] = '"'"'\\0'"'"';\n\t\t\tif (susfs_is_path_hidden(__buf))\n\t\t\t\treturn -ENOENT;\n\t\t}\n\t}\n#endif\n\n$1/' fs/namei.c && echo "✅ Hook berhasil di-inject" || echo "⚠️ Hook injection gagal (non-fatal)"
-          else
-            echo "Hook sudah ada, skip."
           fi
 
       # ==================== 应用 ZeroMount VFS 补丁 ====================
