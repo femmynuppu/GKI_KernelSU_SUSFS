@@ -255,6 +255,14 @@ jobs:
           echo "克隆 SUSFS (分支: $SUSFS_BRANCH)..."
           # ReSukiSU 使用 simonpunk 的原版 SUSFS
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
+          # Pin ke commit yang sudah diverifikasi sukses (prevents drift)
+          cd susfs4ksu
+          SUSFS_PINNED=$(grep "^${SUSFS_BRANCH}=" "$GITHUB_WORKSPACE/config/config" 2>/dev/null | cut -d= -f2)
+          if [ -n "$SUSFS_PINNED" ]; then
+            echo "固定 SUSFS 到提交: $SUSFS_PINNED"
+            git checkout "$SUSFS_PINNED"
+          fi
+          cd ..
 
           # 检查是否启用自定义提交
           CONFIG_FILE="config/config"
@@ -715,6 +723,39 @@ jobs:
                 echo "已修复 exec.c 缺少 susfs_def.h 问题"
               fi
             fi
+          fi
+
+      # ==================== user_path_at_empty() SUSFS hook ====================
+      # Menutup kebocoran faccessat2 + 15+ syscall via satu titik di fs/namei.c
+      - name: 注入 user_path_at_empty hook
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          if ! grep -q 'susfs_is_path_hidden' fs/namei.c; then
+            echo "注入 user_path_at_empty() hook ke fs/namei.c..."
+            perl -i -pe 's/^(int user_path_at_empty\(.*)$/\n#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n\tif (name && !susfs_is_ksu_domain()) {\n\t\tchar __buf[128];\n\t\tlong __len = strncpy_from_user(__buf, name, sizeof(__buf)-1);\n\t\tif (__len > 0) {\n\t\t\t__buf[__len] = '"'"'\\0'"'"';\n\t\t\tif (susfs_is_path_hidden(__buf))\n\t\t\t\treturn -ENOENT;\n\t\t}\n\t}\n#endif\n\n$1/' fs/namei.c && echo "✅ Hook berhasil di-inject" || echo "⚠️ Hook injection gagal (non-fatal)"
+          else
+            echo "Hook sudah ada, skip."
+          fi
+
+      # ==================== 应用 ZeroMount VFS 补丁 ====================
+      - name: 应用 ZeroMount VFS 补丁
+        if: inputs.add_zeromount && inputs.enable_susfs
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          echo "获取 NoMount/ZeroMount 补丁..."
+          git clone --depth 1 https://github.com/femmynuppu/nomount.git /tmp/nomount 2>/dev/null || true
+          NM_PATCH="/tmp/nomount/patches/nomount-susfs-kernel-${{ inputs.kernel_version }}.patch"
+          if [ -f "$NM_PATCH" ]; then
+            patch -p1 --forward -F3 < "$NM_PATCH" || echo "::warning::补丁部分失败 (non-fatal)"
+            # Post-patch include fallback
+            for f in fs/proc/base.c fs/proc/task_mmu.c; do
+              if [ -f "$f" ] && ! grep -qF '<linux/nomount.h>' "$f"; then
+                sed -i '/^#include "internal.h"$/a #ifdef CONFIG_NOMOUNT\\n#include <linux/nomount.h>\\n#endif' "$f" 2>/dev/null || true
+              fi
+            done
+            grep -q '^CONFIG_NOMOUNT=y' "$DEFCONFIG" || echo "CONFIG_NOMOUNT=y" >> "$DEFCONFIG"
+          else
+            echo "::warning::nomount-susfs patch not found for kernel ${{ inputs.kernel_version }}"
           fi
 
       - name: 克隆 Droidspaces 补丁仓库
