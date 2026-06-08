@@ -866,15 +866,8 @@ jobs:
           fi
           # Hook: user_statfs() — after vfs_statfs(&path, st);
           if ! grep -q 'zeromount_spoof_statfs' fs/statfs.c; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\t\tint spoofed;\n#endif\n\t\terror = vfs_statfs(\&path, st);\n#ifdef CONFIG_ZEROMOUNT\n\t\tspoofed = zeromount_spoof_statfs(pathname, st);\n\t\t(void)spoofed;\n#endif\n' > /tmp/zm_statfs_hook
-            # Anchor: error = user_path_at( — unique, before the statfs call
-            # We replace the error=vfs_statfs line with the full block
-            # Actually simpler: inject after retry: label and error = user_path_at block
-            # Use anchor: error = vfs_statfs(\&path, st);
-            sed -i '/^[[:space:]]*error = vfs_statfs(\&path, st);$/{
-              r /tmp/zm_statfs_hook
-              d
-            }' fs/statfs.c 2>/dev/null || true
+            printf '#ifdef CONFIG_ZEROMOUNT\n\t\tzeromount_spoof_statfs(pathname, st);\n#endif\n' > /tmp/zm_statfs_hook
+            sed -i '/^[[:space:]]*error = vfs_statfs(\\&path, st);$/r /tmp/zm_statfs_hook' fs/statfs.c 2>/dev/null || true
             rm -f /tmp/zm_statfs_hook
           fi
           echo "  ✓ statfs.c"
