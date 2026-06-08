@@ -795,7 +795,7 @@ jobs:
           # Hook A: getname_flags() — after audit_getname(result)
           if ! grep -q 'zeromount_getname_hook' fs/namei.c; then
             printf '#ifdef CONFIG_ZEROMOUNT\n\tif (!IS_ERR(result)) {\n\t\tresult = zeromount_getname_hook(result);\n\t}\n#endif\n' > /tmp/zm_namei_getname
-            sed -i '/audit_getname(result);/r /tmp/zm_namei_getname' fs/namei.c
+            sed -i '/audit_getname(result);/r /tmp/zm_namei_getname' fs/namei.c 2>/dev/null || true
             rm -f /tmp/zm_namei_getname
           fi
           # Hook B: generic_permission() — after int ret;
@@ -819,7 +819,7 @@ jobs:
           # Hook: do_sys_openat2() — after tmp = getname(filename)
           if ! grep -q 'zeromount_getname_hook' fs/open.c; then
             printf '#ifdef CONFIG_ZEROMOUNT\n\ttmp = zeromount_getname_hook(tmp);\n#endif\n' > /tmp/zm_open_hook
-            sed -i '/tmp = getname(filename);/r /tmp/zm_open_hook' fs/open.c
+            sed -i '/tmp = getname(filename);/r /tmp/zm_open_hook' fs/open.c 2>/dev/null || true
             rm -f /tmp/zm_open_hook
           fi
           echo "  ✓ open.c"
@@ -833,7 +833,7 @@ jobs:
             printf '\n#ifdef CONFIG_ZEROMOUNT\n\tif (!zeromount_should_skip() \&\& path->dentry) {\n\t\tstruct inode *inode = d_backing_inode(path->dentry);\n\t\tif (inode) {\n\t\t\tchar *vpath = zeromount_get_static_vpath(inode);\n\t\t\tif (vpath) {\n\t\t\t\tint vlen = strlen(vpath);\n\t\t\t\tif (vlen > buflen)\n\t\t\t\t\tvlen = buflen;\n\t\t\t\tif (copy_to_user(buffer, vpath, vlen) == 0) {\n\t\t\t\t\tkfree(vpath);\n\t\t\t\t\tfree_page((unsigned long)tmp);\n\t\t\t\t\treturn vlen;\n\t\t\t\t}\n\t\t\t\tkfree(vpath);\n\t\t\t}\n\t\t}\n\t}\n#endif\n' > /tmp/zm_proc_base_hook
             sed -i '/pathname = d_path(path, tmp, PAGE_SIZE);/{
               r /tmp/zm_proc_base_hook
-            }' fs/proc/base.c
+            }' fs/proc/base.c 2>/dev/null || true
             rm -f /tmp/zm_proc_base_hook
           fi
           echo "  ✓ proc/base.c"
@@ -871,7 +871,7 @@ jobs:
             printf '#ifdef CONFIG_ZEROMOUNT\nstatic inline int zeromount_stat_hook(int dfd, const char __user *filename,\n                                      struct kstat *stat, unsigned int request_mask,\n                                      int flags) {\n    if (zm_is_recursive() || IS_ERR_OR_NULL(filename)) return -ENOENT;\n    if (filename) {\n        char kname[NAME_MAX + 1];\n        long copied = strncpy_from_user(kname, filename, sizeof(kname));\n        if (copied > 0 \&\& kname[0] != '"'"'/'\"'\"') {\n            char *abs_path = zeromount_build_absolute_path(dfd, kname);\n            if (abs_path) {\n                char *resolved = zeromount_resolve_path(abs_path);\n                if (resolved) {\n                    struct path zm_path;\n                    int zm_ret;\n                    zm_enter();\n                    zm_ret = kern_path(resolved, (flags \& AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW, \&zm_path);\n                    zm_exit();\n                    kfree(resolved);\n                    kfree(abs_path);\n                    if (zm_ret == 0) {\n                        zm_ret = vfs_getattr(\&zm_path, stat, request_mask,\n                                             (flags \& AT_SYMLINK_NOFOLLOW) ? AT_SYMLINK_NOFOLLOW : 0);\n                        path_put(\&zm_path);\n                        return zm_ret;\n                    }\n                } else {\n                    kfree(abs_path);\n                }\n            }\n        }\n    }\n    return -ENOENT;\n}\n#endif\n' > /tmp/zm_stat_helper
             sed -i '/^static int vfs_statx(int dfd, const char __user \*filename, int flags,$/{
               r /tmp/zm_stat_helper
-            }' fs/stat.c
+            }' fs/stat.c 2>/dev/null || true
             rm -f /tmp/zm_stat_helper
             # Now inject the call inside vfs_statx, after int error;
             printf '#ifdef CONFIG_ZEROMOUNT\n\tif (filename) {\n\t\tint zm_ret = zeromount_stat_hook(dfd, filename, stat, request_mask, flags);\n\t\tif (zm_ret != -ENOENT)\n\t\t\treturn zm_ret;\n\t}\n#endif\n' > /tmp/zm_stat_call
