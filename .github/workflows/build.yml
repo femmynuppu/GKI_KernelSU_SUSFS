@@ -868,48 +868,11 @@ jobs:
             sed -i '/^#include <linux\/uaccess.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/stat.c
           fi
           if ! grep -q 'zeromount_stat_hook' fs/stat.c; then
-            # Inject static helper function BEFORE vfs_statx()
-            cat > /tmp/zm_stat_helper << 'ZMEOF'
-#ifdef CONFIG_ZEROMOUNT
-static inline int zeromount_stat_hook(int dfd, const char __user *filename,
-                                      struct kstat *stat, unsigned int request_mask,
-                                      int flags) {
-    if (zm_is_recursive() || IS_ERR_OR_NULL(filename)) return -ENOENT;
-    if (filename) {
-        char kname[NAME_MAX + 1];
-        long copied = strncpy_from_user(kname, filename, sizeof(kname));
-        if (copied > 0 && kname[0] != '/') {
-            char *abs_path = zeromount_build_absolute_path(dfd, kname);
-            if (abs_path) {
-                char *resolved = zeromount_resolve_path(abs_path);
-                if (resolved) {
-                    struct path zm_path;
-                    int zm_ret;
-                    zm_enter();
-                    zm_ret = kern_path(resolved, (flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW, &zm_path);
-                    zm_exit();
-                    kfree(resolved);
-                    kfree(abs_path);
-                    if (zm_ret == 0) {
-                        zm_ret = vfs_getattr(&zm_path, stat, request_mask,
-                                             (flags & AT_SYMLINK_NOFOLLOW) ? AT_SYMLINK_NOFOLLOW : 0);
-                        path_put(&zm_path);
-                        return zm_ret;
-                    }
-                } else {
-                    kfree(abs_path);
-                }
-            }
-        }
-    }
-    return -ENOENT;
-}
-#endif
-ZMEOF
+            # Inject static helper from pre-written file (avoids YAML heredoc issues)
             ZM_LINE=$(grep -n '^static int vfs_statx(int dfd, const char __user \*filename, int flags,$' fs/stat.c | head -1 | cut -d: -f1)
             if [ -n "$ZM_LINE" ]; then
               head -n $((ZM_LINE - 1)) fs/stat.c > /tmp/zm_stat_tmp
-              cat /tmp/zm_stat_helper >> /tmp/zm_stat_tmp
+              cat "$SRC/stat_hook.c" >> /tmp/zm_stat_tmp
               tail -n +$ZM_LINE fs/stat.c >> /tmp/zm_stat_tmp
               mv /tmp/zm_stat_tmp fs/stat.c
             fi
@@ -920,7 +883,7 @@ ZMEOF
                 r /tmp/zm_stat_call
               }
             }' fs/stat.c 2>/dev/null || true
-            rm -f /tmp/zm_stat_helper /tmp/zm_stat_call
+            rm -f /tmp/zm_stat_call
           fi
           echo "  ✓ stat.c (include + vfs_statx hook)"
 
