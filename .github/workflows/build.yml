@@ -930,35 +930,30 @@ jobs:
           SRC="$GITHUB_WORKSPACE/src/susfs"
           echo "=== SELinux Evasion anchor-based injection ==="
 
-          # 1. Copy susfs_selinux source files
-          mkdir -p security/selinux/include 2>/dev/null || true
+          # 1. Copy susfs_selinux source files into SELinux directory
           cp "$SRC/susfs_selinux.c" security/selinux/susfs_selinux.c
-          cp "$SRC/susfs_selinux.h" security/selinux/include/susfs_selinux.h
+          cp "$SRC/susfs_selinux.h" security/selinux/susfs_selinux.h
           echo "  ✓ susfs_selinux.c + susfs_selinux.h copied"
 
-          # 2. Add Kconfig entry (idempotent)
-          if ! grep -q 'config KSU_SUSFS_SELINUX_EVASION' security/selinux/Kconfig; then
-            printf '\nconfig KSU_SUSFS_SELINUX_EVASION\n\tbool "SUSFS SELinux Evasion Hooks"\n\tdepends on KSU_SUSFS\n\tdefault y\n\thelp\n\t  Hooks into SELinux sel_read_policy, security_check_context,\n\t  and avc_audit to prevent root detection via SELinux interfaces.\n\t  Blocks policy reads, spoofs context validity checks, and\n\t  suppresses AVC audit messages for root/manager processes.\n' >> security/selinux/Kconfig
-            echo "  ✓ Kconfig updated"
-          fi
-
-          # 3. Add Makefile entry — append susfs_selinux.o to selinux objs
-          if ! grep -q 'CONFIG_KSU_SUSFS_SELINUX_EVASION' security/selinux/Makefile; then
-            printf 'selinux-\$(CONFIG_KSU_SUSFS_SELINUX_EVASION) += susfs_selinux.o\n' >> security/selinux/Makefile
+          # 2. Add Makefile entry to compile susfs_selinux.o
+          #    Uses existing CONFIG_KSU_SUSFS (no new Kconfig needed)
+          if ! grep -q 'susfs_selinux.o' security/selinux/Makefile; then
+            printf 'selinux-\$(CONFIG_KSU_SUSFS) += susfs_selinux.o\n' >> security/selinux/Makefile
             echo "  ✓ Makefile updated"
           fi
 
-          # 4. Inject include + hooks per file (idempotent, anchor-based)
+          # 3. Inject include + hooks per file (idempotent, anchor-based)
+          #    All hooks guarded by existing CONFIG_KSU_SUSFS
 
           # --- security/selinux/selinuxfs.c: hook sel_read_policy ---
-          if ! grep -q '<susfs_selinux.h>' security/selinux/selinuxfs.c; then
-            sed -i '/^#include "security.h"$/a #ifdef CONFIG_KSU_SUSFS_SELINUX_EVASION\n#include "susfs_selinux.h"\n#endif' security/selinux/selinuxfs.c
+          if ! grep -q 'susfs_selinux.h' security/selinux/selinuxfs.c; then
+            sed -i '/^#include "security.h"$/a #ifdef CONFIG_KSU_SUSFS\n#include "susfs_selinux.h"\n#endif' security/selinux/selinuxfs.c
           fi
           if ! grep -q 'susfs_selinux_hook_read_policy' security/selinux/selinuxfs.c; then
-            printf '#ifdef CONFIG_KSU_SUSFS_SELINUX_EVASION\n\tint hook_ret = susfs_selinux_hook_read_policy(buf, count, ppos);\n\tif (hook_ret != -ENOSYS)\n\t\treturn hook_ret;\n#endif\n' > /tmp/se_hook_policy
-            # Anchor: ssize_t length; inside sel_read_policy()
+            printf '#ifdef CONFIG_KSU_SUSFS\n\tint hook_ret = susfs_selinux_hook_read_policy(buf, count, ppos, data, len);\n\tif (hook_ret != -ENOSYS) {\n\t\tkfree(data);\n\t\treturn hook_ret;\n\t}\n#endif\n' > /tmp/se_hook_policy
+            # Anchor: AFTER security_read_policy() call, BEFORE simple_read_from_buffer
             sed -i '/^static ssize_t sel_read_policy/,/^}$/{
-              /ssize_t length;$/{
+              /rc = security_read_policy(state, &data, &len);/{
                 r /tmp/se_hook_policy
               }
             }' security/selinux/selinuxfs.c 2>/dev/null || true
@@ -967,14 +962,14 @@ jobs:
           echo "  ✓ selinuxfs.c (sel_read_policy hook)"
 
           # --- security/selinux/ss/services.c: hook security_check_context ---
-          if ! grep -q '<susfs_selinux.h>' security/selinux/ss/services.c; then
-            sed -i '/^#include "security.h"$/a #ifdef CONFIG_KSU_SUSFS_SELINUX_EVASION\n#include "susfs_selinux.h"\n#endif' security/selinux/ss/services.c
+          if ! grep -q 'susfs_selinux.h' security/selinux/ss/services.c; then
+            sed -i '/^#include "security.h"$/a #ifdef CONFIG_KSU_SUSFS\n#include "susfs_selinux.h"\n#endif' security/selinux/ss/services.c
           fi
           if ! grep -q 'susfs_selinux_hook_check_context' security/selinux/ss/services.c; then
-            printf '#ifdef CONFIG_KSU_SUSFS_SELINUX_EVASION\n\tint hook_ret = susfs_selinux_hook_check_context(scontext, scontext_len);\n\tif (hook_ret != -ENOSYS)\n\t\treturn hook_ret;\n#endif\n' > /tmp/se_hook_ctx
-            # Anchor: int rc = 0; inside security_check_context()
+            printf '#ifdef CONFIG_KSU_SUSFS\n\tint hook_ret = susfs_selinux_hook_check_context(scontext, scontext_len);\n\tif (hook_ret != -ENOSYS)\n\t\treturn hook_ret;\n#endif\n' > /tmp/se_hook_ctx
+            # Anchor: BEFORE context_struct_to_sid() call
             sed -i '/^int security_check_context/,/^}$/{
-              /int rc = 0;$/{
+              /rc = context_struct_to_sid(policydb, scontext, scontext_len, &sid, sidtab);/{
                 r /tmp/se_hook_ctx
               }
             }' security/selinux/ss/services.c 2>/dev/null || true
@@ -983,22 +978,22 @@ jobs:
           echo "  ✓ services.c (security_check_context hook)"
 
           # --- security/selinux/avc.c: hook avc_audit ---
-          if ! grep -q '<susfs_selinux.h>' security/selinux/avc.c; then
-            sed -i '/^#include "avc.h"$/a #ifdef CONFIG_KSU_SUSFS_SELINUX_EVASION\n#include "susfs_selinux.h"\n#endif' security/selinux/avc.c
+          if ! grep -q 'susfs_selinux.h' security/selinux/avc.c; then
+            sed -i '/^#include "avc.h"$/a #ifdef CONFIG_KSU_SUSFS\n#include "susfs_selinux.h"\n#endif' security/selinux/avc.c
           fi
           if ! grep -q 'susfs_selinux_hook_avc_audit' security/selinux/avc.c; then
-            printf '#ifdef CONFIG_KSU_SUSFS_SELINUX_EVASION\n\tif (susfs_selinux_hook_avc_audit() == 1)\n\t\treturn;\n#endif\n' > /tmp/se_hook_avc
-            # Anchor: { after void avc_audit( — inject at function entry
-            sed -i '/^void avc_audit(/,/^{$/{/^{$/{
-              r /tmp/se_hook_avc
-            }}' security/selinux/avc.c 2>/dev/null || true
+            printf '#ifdef CONFIG_KSU_SUSFS\n\tif (susfs_selinux_hook_avc_audit(ssid, tsid, tclass, requested) == 1)\n\t\treturn;\n#endif\n' > /tmp/se_hook_avc
+            # Anchor: AFTER variable declarations, BEFORE audit logic
+            sed -i '/^void avc_audit(/,/^}$/{
+              /u32 denied, audited, result;$/{
+                r /tmp/se_hook_avc
+              }
+            }' security/selinux/avc.c 2>/dev/null || true
             rm -f /tmp/se_hook_avc
           fi
           echo "  ✓ avc.c (avc_audit hook)"
 
-          # 5. Enable CONFIG_KSU_SUSFS_SELINUX_EVASION in defconfig
-          grep -q '^CONFIG_KSU_SUSFS_SELINUX_EVASION=y' "$DEFCONFIG" || echo "CONFIG_KSU_SUSFS_SELINUX_EVASION=y" >> "$DEFCONFIG"
-          echo "  ✓ CONFIG_KSU_SUSFS_SELINUX_EVASION enabled"
+          echo "=== SELinux Evasion injection complete ==="
 
       # ==================== SUSFS 兼容性修复 ====================
       - name: 运行 SUSFS 兼容性修复脚本
