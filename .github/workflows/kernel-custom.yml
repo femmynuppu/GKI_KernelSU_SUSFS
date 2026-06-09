@@ -115,6 +115,11 @@ on:
         required: false
         type: boolean
         default: true
+      add_selinux_evasion:
+        description: "启用 SELinux Evasion hooks (隐藏策略读取/上下文检查/AVC审计)"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-custom-kernel:
@@ -139,6 +144,7 @@ jobs:
       droidspaces: ${{ inputs.droidspaces || 'off' }}
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync || false }}
       add_zeromount: ${{ inputs.add_zeromount }}
+      add_selinux_evasion: ${{ inputs.add_selinux_evasion }}
 
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml
