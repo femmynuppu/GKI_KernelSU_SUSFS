@@ -1455,6 +1455,10 @@ jobs:
       - name: 添加 TCP BBR 配置
         run: |
           if ! grep -q '^CONFIG_TCP_CONG_BBR=y' "$DEFCONFIG"; then
+            # 6.6+ requires CONFIG_TCP_CONG_ADVANCED to make BBR visible in Kconfig
+            if [ "${{ inputs.kernel_version }}" = "6.6" ] || [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+              grep -q '^CONFIG_TCP_CONG_ADVANCED=y' "$DEFCONFIG" || echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$DEFCONFIG"
+            fi
             cat >> "$DEFCONFIG" << 'EOF'
           CONFIG_TCP_CONG_BBR=y
           CONFIG_DEFAULT_TCP_CONG="bbr"
