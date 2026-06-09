@@ -23,7 +23,7 @@
  * Uses existing SUSFS ksu_selinux_hide_enabled flag (set via ioctl/BRENE).
  * When enabled, hides custom SELinux rules from apps.
  */
-extern bool ksu_selinux_hide_enabled;
+extern bool ksu_selinux_hide_enabled __read_mostly;
 
 static inline bool susfs_selinux_should_evade(void)
 {
