@@ -800,13 +800,13 @@ jobs:
           fi
           # Hook B: generic_permission() — after int ret;
           if ! grep -q 'zeromount_is_injected_file' fs/namei.c; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (zeromount_is_injected_file(inode)) {\n\t\tif (mask \& MAY_WRITE)\n\t\t\treturn -EACCES;\n\t\treturn 0;\n\t}\n\n\tif (S_ISDIR(inode->i_mode) \&\& zeromount_is_traversal_allowed(inode, mask)) {\n\t\treturn 0;\n\t}\n#endif\n' > /tmp/zm_namei_gperm
+            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (zeromount_is_injected_file(inode)) {\n\t\tif (mask & MAY_WRITE)\n\t\t\treturn -EACCES;\n\t\treturn 0;\n\t}\n\n\tif (S_ISDIR(inode->i_mode) && zeromount_is_traversal_allowed(inode, mask)) {\n\t\treturn 0;\n\t}\n#endif\n' > /tmp/zm_namei_gperm
             sed -i '/^int generic_permission(struct inode \*inode, int mask)$/,/^}$/{\n  /^[[:space:]]*int ret;$/\{\n    r /tmp/zm_namei_gperm\n  \}\n}' fs/namei.c 2>/dev/null || true
             rm -f /tmp/zm_namei_gperm
           fi
           # Hook C: inode_permission() — after int retval;
           if [ $(grep -c 'zeromount_is_injected_file' fs/namei.c) -lt 2 ]; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (zeromount_is_injected_file(inode)) {\n\t\tif (mask \& MAY_WRITE)\n\t\t\treturn -EACCES;\n\t\treturn 0;\n\t}\n\n\tif (S_ISDIR(inode->i_mode) \&\& zeromount_is_traversal_allowed(inode, mask)) {\n\t\treturn 0;\n\t}\n#endif\n' > /tmp/zm_namei_iperm
+            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (zeromount_is_injected_file(inode)) {\n\t\tif (mask & MAY_WRITE)\n\t\t\treturn -EACCES;\n\t\treturn 0;\n\t}\n\n\tif (S_ISDIR(inode->i_mode) && zeromount_is_traversal_allowed(inode, mask)) {\n\t\treturn 0;\n\t}\n#endif\n' > /tmp/zm_namei_iperm
             sed -i '/^int inode_permission(struct inode \*inode, int mask)$/,/^}$/{\n  /^[[:space:]]*int retval;$/\{\n    r /tmp/zm_namei_iperm\n  \}\n}' fs/namei.c 2>/dev/null || true
             rm -f /tmp/zm_namei_iperm
           fi
@@ -829,7 +829,7 @@ jobs:
             sed -i '/^#include "internal.h"$/i #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/proc/base.c
           fi
           if ! grep -q 'zeromount_should_skip' fs/proc/base.c; then
-            printf '\n#ifdef CONFIG_ZEROMOUNT\n\tif (!zeromount_should_skip() \&\& path->dentry) {\n\t\tstruct inode *inode = d_backing_inode(path->dentry);\n\t\tif (inode) {\n\t\t\tchar *vpath = zeromount_get_static_vpath(inode);\n\t\t\tif (vpath) {\n\t\t\t\tint vlen = strlen(vpath);\n\t\t\t\tif (vlen > buflen)\n\t\t\t\t\tvlen = buflen;\n\t\t\t\tif (copy_to_user(buffer, vpath, vlen) == 0) {\n\t\t\t\t\tkfree(vpath);\n\t\t\t\t\tfree_page((unsigned long)tmp);\n\t\t\t\t\treturn vlen;\n\t\t\t\t}\n\t\t\t\tkfree(vpath);\n\t\t\t}\n\t\t}\n\t}\n#endif\n' > /tmp/zm_proc_base_hook
+            printf '\n#ifdef CONFIG_ZEROMOUNT\n\tif (!zeromount_should_skip() && path->dentry) {\n\t\tstruct inode *inode = d_backing_inode(path->dentry);\n\t\tif (inode) {\n\t\t\tchar *vpath = zeromount_get_static_vpath(inode);\n\t\t\tif (vpath) {\n\t\t\t\tint vlen = strlen(vpath);\n\t\t\t\tif (vlen > buflen)\n\t\t\t\t\tvlen = buflen;\n\t\t\t\tif (copy_to_user(buffer, vpath, vlen) == 0) {\n\t\t\t\t\tkfree(vpath);\n\t\t\t\t\tfree_page((unsigned long)tmp);\n\t\t\t\t\treturn vlen;\n\t\t\t\t}\n\t\t\t\tkfree(vpath);\n\t\t\t}\n\t\t}\n\t}\n#endif\n' > /tmp/zm_proc_base_hook
             sed -i '/^static int do_proc_readlink/,/^}$/{
               /return -ENOMEM;$/{
                 r /tmp/zm_proc_base_hook
