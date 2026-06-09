@@ -824,11 +824,20 @@ jobs:
           fi
           echo "  ✓ open.c"
 
-          # --- fs/proc/base.c ---
+          # --- fs/proc/base.c (include + do_proc_readlink hook) ---
           if ! grep -q '<linux/zeromount.h>' fs/proc/base.c; then
             sed -i '/^#include "internal.h"$/i #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/proc/base.c
           fi
-          echo "  ✓ proc/base.c"
+          if ! grep -q 'zeromount_should_skip' fs/proc/base.c; then
+            printf '\n#ifdef CONFIG_ZEROMOUNT\n\tif (!zeromount_should_skip() \&\& path->dentry) {\n\t\tstruct inode *inode = d_backing_inode(path->dentry);\n\t\tif (inode) {\n\t\t\tchar *vpath = zeromount_get_static_vpath(inode);\n\t\t\tif (vpath) {\n\t\t\t\tint vlen = strlen(vpath);\n\t\t\t\tif (vlen > buflen)\n\t\t\t\t\tvlen = buflen;\n\t\t\t\tif (copy_to_user(buffer, vpath, vlen) == 0) {\n\t\t\t\t\tkfree(vpath);\n\t\t\t\t\tfree_page((unsigned long)tmp);\n\t\t\t\t\treturn vlen;\n\t\t\t\t}\n\t\t\t\tkfree(vpath);\n\t\t\t}\n\t\t}\n\t}\n#endif\n' > /tmp/zm_proc_base_hook
+            sed -i '/^static int do_proc_readlink/,/^}$/{
+              /return -ENOMEM;$/{
+                r /tmp/zm_proc_base_hook
+              }
+            }' fs/proc/base.c 2>/dev/null || true
+            rm -f /tmp/zm_proc_base_hook
+          fi
+          echo "  ✓ proc/base.c (include + do_proc_readlink hook)"
 
           # --- fs/proc/task_mmu.c (v2.1.0-only, simplified) ---
           if ! grep -q '<linux/zeromount.h>' fs/proc/task_mmu.c; then
@@ -854,11 +863,66 @@ jobs:
           fi
           echo "  ✓ readdir.c"
 
-          # --- fs/stat.c ---
+          # --- fs/stat.c (include + vfs_statx hook) ---
           if ! grep -q '<linux/zeromount.h>' fs/stat.c; then
             sed -i '/^#include <linux\/uaccess.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/stat.c
           fi
-          echo "  ✓ stat.c"
+          if ! grep -q 'zeromount_stat_hook' fs/stat.c; then
+            # Inject static helper function BEFORE vfs_statx()
+            cat > /tmp/zm_stat_helper << 'ZMEOF'
+#ifdef CONFIG_ZEROMOUNT
+static inline int zeromount_stat_hook(int dfd, const char __user *filename,
+                                      struct kstat *stat, unsigned int request_mask,
+                                      int flags) {
+    if (zm_is_recursive() || IS_ERR_OR_NULL(filename)) return -ENOENT;
+    if (filename) {
+        char kname[NAME_MAX + 1];
+        long copied = strncpy_from_user(kname, filename, sizeof(kname));
+        if (copied > 0 && kname[0] != '/') {
+            char *abs_path = zeromount_build_absolute_path(dfd, kname);
+            if (abs_path) {
+                char *resolved = zeromount_resolve_path(abs_path);
+                if (resolved) {
+                    struct path zm_path;
+                    int zm_ret;
+                    zm_enter();
+                    zm_ret = kern_path(resolved, (flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW, &zm_path);
+                    zm_exit();
+                    kfree(resolved);
+                    kfree(abs_path);
+                    if (zm_ret == 0) {
+                        zm_ret = vfs_getattr(&zm_path, stat, request_mask,
+                                             (flags & AT_SYMLINK_NOFOLLOW) ? AT_SYMLINK_NOFOLLOW : 0);
+                        path_put(&zm_path);
+                        return zm_ret;
+                    }
+                } else {
+                    kfree(abs_path);
+                }
+            }
+        }
+    }
+    return -ENOENT;
+}
+#endif
+ZMEOF
+            ZM_LINE=$(grep -n '^static int vfs_statx(int dfd, const char __user \*filename, int flags,$' fs/stat.c | head -1 | cut -d: -f1)
+            if [ -n "$ZM_LINE" ]; then
+              head -n $((ZM_LINE - 1)) fs/stat.c > /tmp/zm_stat_tmp
+              cat /tmp/zm_stat_helper >> /tmp/zm_stat_tmp
+              tail -n +$ZM_LINE fs/stat.c >> /tmp/zm_stat_tmp
+              mv /tmp/zm_stat_tmp fs/stat.c
+            fi
+            # Inject call inside vfs_statx AFTER int error;
+            printf '#ifdef CONFIG_ZEROMOUNT\n\t/* Try ZeroMount hook for relative paths */\n\tif (filename) {\n\t\tint zm_ret = zeromount_stat_hook(dfd, filename, stat, request_mask, flags);\n\t\tif (zm_ret != -ENOENT)\n\t\t\treturn zm_ret;\n\t}\n#endif\n' > /tmp/zm_stat_call
+            sed -i '/^static int vfs_statx/,/^}$/{
+              /^[[:space:]]*int error;$/{
+                r /tmp/zm_stat_call
+              }
+            }' fs/stat.c 2>/dev/null || true
+            rm -f /tmp/zm_stat_helper /tmp/zm_stat_call
+          fi
+          echo "  ✓ stat.c (include + vfs_statx hook)"
 
           # --- fs/statfs.c ---
           if ! grep -q '<linux/zeromount.h>' fs/statfs.c; then
