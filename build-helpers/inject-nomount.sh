@@ -68,26 +68,26 @@ if ! grep -q 'nomount_spoof_statfs' fs/statfs.c; then
   echo "  + statfs.c"
 fi
 
-# --- verify every hook landed (fail loudly for auto-iteration) ------------
-declare -A CHECK=(
-  [fs/d_path.c]=nomount_handle_dpath
-  [fs/namei.c]=nomount_handle_getname
-  [fs/proc/task_mmu.c]=nomount_spoof_mmap_metadata
-  [fs/readdir.c]=nomount_handle_iterate_dir
-  [fs/stat.c]=nomount_handle_getattr
-  [fs/statfs.c]=nomount_spoof_statfs
-)
-echo "=== verification ==="
-for f in "${!CHECK[@]}"; do
-  if grep -q "${CHECK[$f]}" "$f"; then
-    echo "  ok   $f"
+# --- verify every hook CALL SITE landed (not just the extern decl) --------
+# grep -F on the actual call statement so an extern-only false-positive can't
+# pass when SUSFS/a newer kernel shifts an anchor and the hook silently misses.
+echo "=== verification (hook call-sites) ==="
+check_call() {  # file  call_substring  min_count
+  local f="$1" pat="$2" min="$3" n
+  n=$(grep -Fc "$pat" "$f" 2>/dev/null || echo 0)
+  if [ "$n" -ge "$min" ]; then
+    echo "  ok   $f  ($pat x$n)"
   else
-    echo "  FAIL $f (anchor for ${CHECK[$f]} not found — kernel source layout changed)"
+    echo "  FAIL $f  ($pat x$n, need $min) — anchor shifted, hook NOT injected"
     fail=1
   fi
-done
-# namei.c needs all four hooks; verify permission + getname both present
-if ! grep -q 'nomount_handle_permission' fs/namei.c; then echo "  FAIL fs/namei.c permission hook missing"; fail=1; fi
-if [ "$(grep -c 'nomount_handle_getname' fs/namei.c)" -lt 2 ]; then echo "  WARN fs/namei.c getname hook applied <2 times"; fi
+}
+check_call fs/d_path.c        'nm_path = nomount_handle_dpath(path, buf, buflen);'  1
+check_call fs/namei.c         'result = nomount_handle_getname(result);'            2
+check_call fs/namei.c         'nm_perm = nomount_handle_permission(inode, mask);'   2
+check_call fs/proc/task_mmu.c 'nomount_spoof_mmap_metadata(inode, &dev, &ino);'     1
+check_call fs/readdir.c       'res = nomount_handle_iterate_dir(file, ctx);'        1
+check_call fs/stat.c          'return nomount_handle_getattr(vfs_getattr_nosec('    1
+check_call fs/statfs.c        'nomount_spoof_statfs(path, buf);'                     1
 
 [ "$fail" -eq 0 ] && echo "NoMount injection OK" || { echo "NoMount injection had failures"; exit 1; }
