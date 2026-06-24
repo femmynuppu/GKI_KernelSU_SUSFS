@@ -89,6 +89,10 @@ on:
         required: false
         type: boolean
         default: false
+      add_nomount:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-kernel:
@@ -1005,6 +1009,17 @@ jobs:
           else
             echo "::warning::fix-susfs-compat.sh not found, skipping"
           fi
+
+      # ==================== 注入 NoMount VFS (anchor-based) ====================
+      # NoMount v1.1.0 mountless VFS redirection. Injected AFTER SUSFS so its anchors
+      # (original kernel lines SUSFS appends after) survive. Coexists with ReSukiSU+SUSFS.
+      - name: 注入 NoMount VFS hooks
+        if: inputs.add_nomount
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          bash "${{ github.workspace }}/build-helpers/inject-nomount.sh" "${{ github.workspace }}/src/nomount"
+          grep -q '^CONFIG_NOMOUNT=y$' "$DEFCONFIG" || echo "CONFIG_NOMOUNT=y" >> "$DEFCONFIG"
+          echo "CONFIG_NOMOUNT=y appended to $DEFCONFIG"
 
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'

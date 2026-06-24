@@ -120,6 +120,11 @@ on:
         required: false
         type: boolean
         default: true
+      add_nomount:
+        description: "启用 NoMount VFS (mountless 路径重定向, v1.1.0)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-custom-kernel:
@@ -145,6 +150,7 @@ jobs:
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync || false }}
       add_zeromount: ${{ inputs.add_zeromount }}
       add_selinux_evasion: ${{ inputs.add_selinux_evasion }}
+      add_nomount: ${{ inputs.add_nomount }}
 
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml
