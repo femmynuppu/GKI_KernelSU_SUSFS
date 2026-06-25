@@ -19,10 +19,12 @@ echo "  + fs/nomount.c, fs/nomount.h"
 
 # --- 2. Kconfig + Makefile ------------------------------------------------
 if ! grep -q 'config NOMOUNT' fs/Kconfig; then
-  # default n (not y): build.yml appends CONFIG_NOMOUNT=y explicitly. If the Kconfig
-  # default were y, `make savedefconfig` would drop the redundant =y line and kleaf's
-  # "savedefconfig does not match gki_defconfig" check would fail.
-  printf '\nconfig NOMOUNT\n\tbool "NoMount Path Redirection Subsystem"\n\tdefault n\n\thelp\n\t  NoMount allows path redirection and virtual file injection without mounting.\n' >> fs/Kconfig
+  # default y, and we deliberately do NOT add CONFIG_NOMOUNT=y to gki_defconfig: a
+  # symbol left at its Kconfig default is omitted by `make savedefconfig`, so the
+  # defconfig stays canonical and kleaf's "savedefconfig does not match gki_defconfig"
+  # check passes. This Kconfig entry only exists when add_nomount=true (the step that
+  # runs this script), so default y == enabled exactly when NoMount is injected.
+  printf '\nconfig NOMOUNT\n\tbool "NoMount Path Redirection Subsystem"\n\tdefault y\n\thelp\n\t  NoMount allows path redirection and virtual file injection without mounting.\n' >> fs/Kconfig
 fi
 grep -q 'CONFIG_NOMOUNT' fs/Makefile || printf 'obj-$(CONFIG_NOMOUNT) += nomount.o\n' >> fs/Makefile
 echo "  + Kconfig, Makefile"
