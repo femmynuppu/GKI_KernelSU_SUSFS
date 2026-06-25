@@ -1018,8 +1018,10 @@ jobs:
         working-directory: ${{ env.KERNEL_ROOT }}/common
         run: |
           bash "${{ github.workspace }}/build-helpers/inject-nomount.sh" "${{ github.workspace }}/src/nomount"
-          grep -q '^CONFIG_NOMOUNT=y$' "$DEFCONFIG" || echo "CONFIG_NOMOUNT=y" >> "$DEFCONFIG"
-          echo "CONFIG_NOMOUNT=y appended to $DEFCONFIG"
+          # Do NOT append CONFIG_NOMOUNT=y to the defconfig: `config NOMOUNT` is `default y`,
+          # so it is enabled from its Kconfig default and `make savedefconfig` keeps the
+          # defconfig canonical (avoids kleaf "savedefconfig does not match gki_defconfig").
+          echo "NoMount injected; CONFIG_NOMOUNT enabled via Kconfig default y"
 
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
