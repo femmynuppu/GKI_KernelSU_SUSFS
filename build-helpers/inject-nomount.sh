@@ -35,8 +35,10 @@ fi
 if ! grep -q 'nomount_handle_getname' fs/namei.c; then
   perl -0777 -pi -e 's/(#define EMBEDDED_NAME_MAX\t\(PATH_MAX - offsetof\(struct filename, iname\)\)\n)/$1#ifdef CONFIG_NOMOUNT\nextern struct filename *nomount_handle_getname(struct filename *name);\nextern int nomount_handle_permission(struct inode *inode, int mask);\n#endif\n/' fs/namei.c
   perl -0777 -pi -e 's/(\n)(\taudit_getname\(result\);)/$1#ifdef CONFIG_NOMOUNT\n\tif (!IS_ERR(result)) {\n\t\tresult = nomount_handle_getname(result);\n\t}\n#endif\n$2/g' fs/namei.c
-  perl -0777 -pi -e 's/(int generic_permission\(struct inode \*inode, int mask\)\n\{\n\tint ret;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
-  perl -0777 -pi -e 's/(int inode_permission\(struct inode \*inode, int mask\)\n\{\n\tint retval;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
+  # generic_permission/inode_permission gained a leading mnt_idmap/mnt_userns arg in 6.x
+  # and the signature may span two lines, so match the whole arg list with .*? (dotall).
+  perl -0777 -pi -e 's/(int generic_permission\(.*?\)\n\{\n\tint ret;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
+  perl -0777 -pi -e 's/(int inode_permission\(.*?\)\n\{\n\tint retval;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
   echo "  + namei.c"
 fi
 
@@ -51,6 +53,8 @@ fi
 if ! grep -q 'nomount_handle_iterate_dir' fs/readdir.c; then
   perl -0777 -pi -e 's/(\nint iterate_dir\(struct file \*file, struct dir_context \*ctx\)\n)/\n#ifdef CONFIG_NOMOUNT\nextern int nomount_handle_iterate_dir(struct file *file, struct dir_context *ctx);\n#endif\n$1/' fs/readdir.c
   perl -0777 -pi -e 's/(\n\t\tctx->pos = file->f_pos;\n)(\t\tif \(shared\)\n\t\t\tres = file->f_op->iterate_shared\(file, ctx\);\n\t\telse\n\t\t\tres = file->f_op->iterate\(file, ctx\);\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tres = nomount_handle_iterate_dir(file, ctx);\n#else\n$2#endif\n/s' fs/readdir.c
+  # 6.5+ removed the .iterate (non-shared) f_op: the dispatch is a single iterate_shared line.
+  perl -0777 -pi -e 's/(\n\t\tctx->pos = file->f_pos;\n)(\t\tres = file->f_op->iterate_shared\(file, ctx\);\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tres = nomount_handle_iterate_dir(file, ctx);\n#else\n$2#endif\n/s' fs/readdir.c
   echo "  + readdir.c"
 fi
 
@@ -74,7 +78,7 @@ fi
 echo "=== verification (hook call-sites) ==="
 check_call() {  # file  call_substring  min_count
   local f="$1" pat="$2" min="$3" n
-  n=$(grep -Fc "$pat" "$f" 2>/dev/null || echo 0)
+  n=$(grep -Fc "$pat" "$f" 2>/dev/null); [ -n "$n" ] || n=0
   if [ "$n" -ge "$min" ]; then
     echo "  ok   $f  ($pat x$n)"
   else
