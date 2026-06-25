@@ -32,7 +32,12 @@ echo "  + Kconfig, Makefile"
 # --- 3. fs/d_path.c (d_path) ----------------------------------------------
 if ! grep -q 'nomount_handle_dpath' fs/d_path.c; then
   perl -0777 -pi -e 's/(\nchar \*d_path\(const struct path \*path, char \*buf, int buflen\)\n)/\n#ifdef CONFIG_NOMOUNT\nextern char *nomount_handle_dpath(const struct path *path, char *buf, int buflen);\n#endif\n$1/' fs/d_path.c
-  perl -0777 -pi -e 's/(char \*d_path\(const struct path \*path, char \*buf, int buflen\)\n\{\n.*?\tint error;\n)/$1#ifdef CONFIG_NOMOUNT\n\tchar *nm_path = nomount_handle_dpath(path, buf, buflen);\n\tif (unlikely(nm_path)) {\n\t\treturn nm_path;\n\t}\n#endif\n/s' fs/d_path.c
+  # 5.x: d_path declares `int error;`. Bound with [^}]*? so the match cannot cross the
+  # function's closing brace (6.12 d_path has NO `int error;`, so a plain .*? would run
+  # into SYSCALL_DEFINE2(getcwd) and inject there — undeclared path/buflen).
+  perl -0777 -pi -e 's/(char \*d_path\(const struct path \*path, char \*buf, int buflen\)\n\{\n[^}]*?\tint error;\n)/$1#ifdef CONFIG_NOMOUNT\n\tchar *nm_path = nomount_handle_dpath(path, buf, buflen);\n\tif (unlikely(nm_path)) {\n\t\treturn nm_path;\n\t}\n#endif\n/s' fs/d_path.c
+  # 6.12: d_path was refactored to DECLARE_BUFFER(...) + struct path root; (no int error).
+  perl -0777 -pi -e 's/(char \*d_path\(const struct path \*path, char \*buf, int buflen\)\n\{\n\tDECLARE_BUFFER\(b, buf, buflen\);\n\tstruct path root;\n)/$1#ifdef CONFIG_NOMOUNT\n\tchar *nm_path = nomount_handle_dpath(path, buf, buflen);\n\tif (unlikely(nm_path)) {\n\t\treturn nm_path;\n\t}\n#endif\n/s' fs/d_path.c
   echo "  + d_path.c"
 fi
 
