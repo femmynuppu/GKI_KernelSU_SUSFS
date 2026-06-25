@@ -50,7 +50,7 @@ fi
 # --- 5. fs/proc/task_mmu.c (show_map_vma) ---------------------------------
 if ! grep -q 'nomount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
   perl -0777 -pi -e 's/(\nstatic void\nshow_map_vma\()/\n#ifdef CONFIG_NOMOUNT\nextern bool nomount_spoof_mmap_metadata(struct inode *inode, dev_t *dev, unsigned long *ino);\n#endif\n$1/' fs/proc/task_mmu.c
-  perl -0777 -pi -e 's/(\n\t\tino = inode->i_ino;\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tnomount_spoof_mmap_metadata(inode, &dev, &ino);\n#endif\n/' fs/proc/task_mmu.c
+  perl -0777 -pi -e 's/(\n\t\tino = inode->i_ino;\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tnomount_spoof_mmap_metadata((struct inode *)inode, &dev, &ino);\n#endif\n/' fs/proc/task_mmu.c
   echo "  + task_mmu.c"
 fi
 
@@ -94,7 +94,7 @@ check_call() {  # file  call_substring  min_count
 check_call fs/d_path.c        'nm_path = nomount_handle_dpath(path, buf, buflen);'  1
 check_call fs/namei.c         'result = nomount_handle_getname(result);'            2
 check_call fs/namei.c         'nm_perm = nomount_handle_permission(inode, mask);'   2
-check_call fs/proc/task_mmu.c 'nomount_spoof_mmap_metadata(inode, &dev, &ino);'     1
+check_call fs/proc/task_mmu.c 'nomount_spoof_mmap_metadata((struct inode *)inode, &dev, &ino);'     1
 check_call fs/readdir.c       'res = nomount_handle_iterate_dir(file, ctx);'        1
 check_call fs/stat.c          'return nomount_handle_getattr(vfs_getattr_nosec('    1
 check_call fs/statfs.c        'nomount_spoof_statfs(path, buf);'                     1
