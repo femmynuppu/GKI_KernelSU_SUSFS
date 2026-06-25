@@ -1647,6 +1647,17 @@ jobs:
               if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
                 LTO_FLAG="--lto=none"
               fi
+              # WildKSU modversions bypass (6.12): paksa vendor module load walau KMI symbol-CRC drift.
+              # Mengubah check_version() bad_version: 'return 0' -> 'return 1' (sama spt WildKernels Bypass-Image).
+              # Tanpa ini, image masih nolak modul WiFi/BT/NFC saat KMI bergeser (--lto=none + KMI loosen).
+              if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+                VC="common/kernel/module/version.c"
+                if [ -f "$VC" ]; then
+                  sed -i '/bad_version:/{:a;n;/return 0;/{s/return 0;/return 1;/;b};ba}' "$VC"
+                  grep -A5 'bad_version:' "$VC" | grep -q 'return 1;' || { echo "WildKSU modversions bypass FAILED"; exit 1; }
+                  echo "WildKSU modversions bypass applied to $VC"
+                fi
+              fi
               tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast $LTO_FLAG $FRAG_FLAG //common:kernel_aarch64_dist || exit 1
               strings ./bazel-bin/common/kernel_aarch64/Image | grep 'Linux version'
             fi
