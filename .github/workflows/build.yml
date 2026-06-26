@@ -1522,6 +1522,54 @@ jobs:
           fi
           echo "TRIM_UNUSED_KSYMS disabled in $DEFCONFIG (keep GKI symbols for vendor WiFi/BT)"
 
+      # ==================== 移除 6.12 protected module/export gate ====================
+      - name: 移除 protected module/export gate 以修复 WiFi/BT kallsyms
+        if: inputs.kernel_version == '6.12'
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          set -euo pipefail
+
+          if [ -f "build/build.sh" ]; then
+            echo "Legacy build.sh kernel; protected export Bazel gate not present."
+            exit 0
+          fi
+
+          # Mirror WildKernels remove-protected-exports for android16-6.12:
+          # leaving protected_module_names_list active makes modpost generate
+          # protected_symbol_exports[], then unsigned GKI provider modules
+          # can fail with "exports protected symbol" and WiFi/BT symbols vanish.
+          rm -rf common/android/abi_gki_protected_exports_*
+          if ls -1 common/android/abi_gki_protected_exports_* >/dev/null 2>&1; then
+            echo "Error: abi_gki_protected_exports_* still exists after removal"
+            ls -la common/android/abi_gki_protected_exports_* || true
+            exit 1
+          fi
+
+          if grep -q '"protected_exports_list"[[:space:]]*:[[:space:]]*"android/abi_gki_protected_exports_aarch64"' common/BUILD.bazel; then
+            perl -pi -e 's/^\s*"protected_exports_list"\s*:\s*"android\/abi_gki_protected_exports_aarch64",\s*$//;' common/BUILD.bazel
+            if grep -q '"protected_exports_list"[[:space:]]*:[[:space:]]*"android/abi_gki_protected_exports_aarch64"' common/BUILD.bazel; then
+              echo "Error: protected_exports_list reference still present in common/BUILD.bazel"
+              exit 1
+            fi
+          fi
+
+          if grep -q '^protected_modules = ' common/modules.bzl; then
+            sed -i 's/protected_modules = \[.*\]/protected_modules = []/' common/modules.bzl
+            if ! grep -q '^protected_modules = \[\]' common/modules.bzl; then
+              echo "Error: protected_modules was not set to [] in common/modules.bzl"
+              exit 1
+            fi
+          fi
+
+          if grep -q 'protected_module_names_list' common/BUILD.bazel; then
+            perl -pi -e 's/^\s*protected_module_names_list\s*=\s*":gki_(?:aarch64|x86_64)_protected_module_names",\s*$//;' common/BUILD.bazel
+            if grep -q 'protected_module_names_list' common/BUILD.bazel; then
+              echo "Error: protected_module_names_list reference still present in common/BUILD.bazel"
+              grep -n 'protected_module_names_list' common/BUILD.bazel || true
+              exit 1
+            fi
+          fi
+
       # ==================== 配置内核名称 ====================
       - name: 配置内核名称
         working-directory: ${{ env.KERNEL_ROOT }}
@@ -1530,12 +1578,8 @@ jobs:
             sed -i 's/-dirty//' ./common/scripts/setlocalversion
           else
             # 配置 6.1+ 内核
-            # FIX (device-validated 2026-06-26): KEEP the GKI protected-exports + symbol list STOCK.
-            # The old `rm abi_gki_protected_exports_*` (+ removing protected_exports_list) broke
-            # vendor-module symbol resolution on-device: rfkill_alloc/hci_*/cfg80211_* went MISSING
-            # from kallsyms, rfkill.ko/bluetooth.ko failed to load -> WiFi/BT dead. WildKernels (which
-            # works on the same 13T/mt6895) keeps these STOCK and only relaxes the defconfig check.
-            # Replicate that: disable check_defconfig, drop strict KMI mode, do NOT strip the lists.
+            # 6.12 device validation: WildKernels removes the full protected module/export gate
+            # in the previous step. Keep this step limited to KMI strict-mode and version branding.
             sed -i '/kmi_symbol_list_strict_mode/d' ./common/BUILD.bazel
             sed -i '/name = "kernel_aarch64",/a\    check_defconfig = "disabled",' ./common/BUILD.bazel
             sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
