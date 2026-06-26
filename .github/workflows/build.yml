@@ -1508,6 +1508,20 @@ jobs:
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
 
+      # ============ 保住 vendor 模块所需 GKI 符号 (WiFi/BT) ============
+      # device-validated 2026-06-26: TRIM_UNUSED_KSYMS=y + UNUSED_KSYMS_WHITELIST trims module-exported
+      # GKI symbols (rfkill_alloc/hci_*/cfg80211_*) that only vendor modules consume -> vendor WiFi/BT
+      # modules fail with "Unknown symbol" -> WiFi/BT dead. Disable trim so every EXPORT_SYMBOL is kept.
+      - name: 禁用符号裁剪以保住 WiFi/BT vendor 符号
+        if: inputs.kernel_version == '6.12'
+        run: |
+          if grep -q '^CONFIG_TRIM_UNUSED_KSYMS=y' "$DEFCONFIG"; then
+            sed -i 's/^CONFIG_TRIM_UNUSED_KSYMS=y/# CONFIG_TRIM_UNUSED_KSYMS is not set/' "$DEFCONFIG"
+          else
+            echo '# CONFIG_TRIM_UNUSED_KSYMS is not set' >> "$DEFCONFIG"
+          fi
+          echo "TRIM_UNUSED_KSYMS disabled in $DEFCONFIG (keep GKI symbols for vendor WiFi/BT)"
+
       # ==================== 配置内核名称 ====================
       - name: 配置内核名称
         working-directory: ${{ env.KERNEL_ROOT }}
@@ -1516,9 +1530,14 @@ jobs:
             sed -i 's/-dirty//' ./common/scripts/setlocalversion
           else
             # 配置 6.1+ 内核
-            sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' ./common/BUILD.bazel
+            # FIX (device-validated 2026-06-26): KEEP the GKI protected-exports + symbol list STOCK.
+            # The old `rm abi_gki_protected_exports_*` (+ removing protected_exports_list) broke
+            # vendor-module symbol resolution on-device: rfkill_alloc/hci_*/cfg80211_* went MISSING
+            # from kallsyms, rfkill.ko/bluetooth.ko failed to load -> WiFi/BT dead. WildKernels (which
+            # works on the same 13T/mt6895) keeps these STOCK and only relaxes the defconfig check.
+            # Replicate that: disable check_defconfig, drop strict KMI mode, do NOT strip the lists.
             sed -i '/kmi_symbol_list_strict_mode/d' ./common/BUILD.bazel
-            rm -rf ./common/android/abi_gki_protected_exports_*
+            sed -i '/name = "kernel_aarch64",/a\    check_defconfig = "disabled",' ./common/BUILD.bazel
             sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
           fi
 
