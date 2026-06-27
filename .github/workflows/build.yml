@@ -1522,9 +1522,9 @@ jobs:
           fi
           echo "TRIM_UNUSED_KSYMS disabled in $DEFCONFIG (keep GKI symbols for vendor WiFi/BT)"
 
-      # ==================== 移除 6.12 protected module/export gate ====================
+      # ==================== 移除 6.6/6.12 protected module/export gate ====================
       - name: 移除 protected module/export gate 以修复 WiFi/BT kallsyms
-        if: inputs.kernel_version == '6.12'
+        if: inputs.kernel_version == '6.6' || inputs.kernel_version == '6.12'
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           set -euo pipefail
