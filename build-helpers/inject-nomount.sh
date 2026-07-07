@@ -35,15 +35,20 @@ fi
 if ! grep -q 'nomount_handle_getname' fs/namei.c; then
   perl -0777 -pi -e 's/(#define EMBEDDED_NAME_MAX\t\(PATH_MAX - offsetof\(struct filename, iname\)\)\n)/$1#ifdef CONFIG_NOMOUNT\nextern struct filename *nomount_handle_getname(struct filename *name);\nextern int nomount_handle_permission(struct inode *inode, int mask);\n#endif\n/' fs/namei.c
   perl -0777 -pi -e 's/(\n)(\taudit_getname\(result\);)/$1#ifdef CONFIG_NOMOUNT\n\tif (!IS_ERR(result)) {\n\t\tresult = nomount_handle_getname(result);\n\t}\n#endif\n$2/g' fs/namei.c
-  perl -0777 -pi -e 's/(int generic_permission\(struct inode \*inode, int mask\)\n\{\n\tint ret;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
-  perl -0777 -pi -e 's/(int inode_permission\(struct inode \*inode, int mask\)\n\{\n\tint retval;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
+  perl -0777 -pi -e 's/(int generic_permission\(.*?\)\n\{\n\tint ret;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
+  perl -0777 -pi -e 's/(int inode_permission\(.*?\)\n\{\n\tint retval;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
+  # Robust fallback: match any whitespace before int ret/retval
+  perl -0777 -pi -e 's/(int generic_permission\([^)]+\)\n\{\n[ \t]*int ret;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
+  perl -0777 -pi -e 's/(int inode_permission\([^)]+\)\n\{\n[ \t]*int retval;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
   echo "  + namei.c"
 fi
 
 # --- 5. fs/proc/task_mmu.c (show_map_vma) ---------------------------------
 if ! grep -q 'nomount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
   perl -0777 -pi -e 's/(\nstatic void\nshow_map_vma\()/\n#ifdef CONFIG_NOMOUNT\nextern bool nomount_spoof_mmap_metadata(struct inode *inode, dev_t *dev, unsigned long *ino);\n#endif\n$1/' fs/proc/task_mmu.c
-  perl -0777 -pi -e 's/(\n\t\tino = inode->i_ino;\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tnomount_spoof_mmap_metadata(inode, &dev, &ino);\n#endif\n/' fs/proc/task_mmu.c
+  perl -0777 -pi -e 's/(\n\t\tino = inode->i_ino;\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tnomount_spoof_mmap_metadata((struct inode *)inode, &dev, &ino);\n#endif\n/' fs/proc/task_mmu.c
+  # Robust fallback: match any whitespace-prefixed ino = inode->i_ino
+  perl -0777 -pi -e 's/(\n[ \t]+ino = inode->i_ino;\n)/$1#ifdef CONFIG_NOMOUNT\n\tnomount_spoof_mmap_metadata((struct inode *)inode, \&dev, \&ino);\n#endif\n/s' fs/proc/task_mmu.c
   echo "  + task_mmu.c"
 fi
 
