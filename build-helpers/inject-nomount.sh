@@ -50,7 +50,12 @@ fi
 # --- 6. fs/readdir.c (iterate_dir) ----------------------------------------
 if ! grep -q 'nomount_handle_iterate_dir' fs/readdir.c; then
   perl -0777 -pi -e 's/(\nint iterate_dir\(struct file \*file, struct dir_context \*ctx\)\n)/\n#ifdef CONFIG_NOMOUNT\nextern int nomount_handle_iterate_dir(struct file *file, struct dir_context *ctx);\n#endif\n$1/' fs/readdir.c
+  # 5.x: dual-line if/else dispatch (iterate_shared + iterate)
   perl -0777 -pi -e 's/(\n\t\tctx->pos = file->f_pos;\n)(\t\tif \(shared\)\n\t\t\tres = file->f_op->iterate_shared\(file, ctx\);\n\t\telse\n\t\t\tres = file->f_op->iterate\(file, ctx\);\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tres = nomount_handle_iterate_dir(file, ctx);\n#else\n$2#endif\n/s' fs/readdir.c
+  # 6.5+: single iterate_shared line (no .iterate f_op)
+  perl -0777 -pi -e 's/(\n\t\tctx->pos = file->f_pos;\n)(\t\tres = file->f_op->iterate_shared\(file, ctx\);\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tres = nomount_handle_iterate_dir(file, ctx);\n#else\n$2#endif\n/s' fs/readdir.c
+  # Robust fallback: match any whitespace-prefixed ctx->pos + iterate_shared
+  perl -0777 -pi -e 's/(\n[ \t]+ctx->pos = file->f_pos;\n)([ \t]+res = file->f_op->iterate_shared\(file, ctx\);\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tres = nomount_handle_iterate_dir(file, ctx);\n#else\n$2#endif\n/s' fs/readdir.c
   echo "  + readdir.c"
 fi
 
@@ -73,9 +78,11 @@ fi
 # pass when SUSFS/a newer kernel shifts an anchor and the hook silently misses.
 echo "=== verification (hook call-sites) ==="
 check_call() {  # file  call_substring  min_count
-  local f="$1" pat="$2" min="$3" n
-  n=$(grep -Fc "$pat" "$f" 2>/dev/null || echo 0)
-  if [ "$n" -ge "$min" ]; then
+  local f="$1" pat="$2" min="$3" n raw
+  raw=$(grep -Fc "$pat" "$f" 2>/dev/null) || raw=0
+  n=$(echo "$raw" | tr -d '[:space:]')
+  [[ "$n" =~ ^[0-9]+$ ]] || n=0
+  if [[ "$n" -ge "$min" ]]; then
     echo "  ok   $f  ($pat x$n)"
   else
     echo "  FAIL $f  ($pat x$n, need $min) — anchor shifted, hook NOT injected"
@@ -85,7 +92,7 @@ check_call() {  # file  call_substring  min_count
 check_call fs/d_path.c        'nm_path = nomount_handle_dpath(path, buf, buflen);'  1
 check_call fs/namei.c         'result = nomount_handle_getname(result);'            2
 check_call fs/namei.c         'nm_perm = nomount_handle_permission(inode, mask);'   2
-check_call fs/proc/task_mmu.c 'nomount_spoof_mmap_metadata(inode, &dev, &ino);'     1
+check_call fs/proc/task_mmu.c 'nomount_spoof_mmap_metadata((struct inode *)inode, &dev, &ino);'     1
 check_call fs/readdir.c       'res = nomount_handle_iterate_dir(file, ctx);'        1
 check_call fs/stat.c          'return nomount_handle_getattr(vfs_getattr_nosec('    1
 check_call fs/statfs.c        'nomount_spoof_statfs(path, buf);'                     1
