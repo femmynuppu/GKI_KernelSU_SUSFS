@@ -638,10 +638,7 @@ jobs:
           fi
 
           if [[ "${{ inputs.android_version }}" == "android15" && "${{ inputs.kernel_version }}" == "6.6" ]]; then
-            if [[ "$CURRENT_SUB" -le 92 ]]; then
-              echo "还原 Android 15 6.6 base.c 临时调整"
-              sed -i '/^#include <linux\/dma-buf.h>$/d' fs/proc/base.c
-            fi
+            # dma-buf.h is a permanent SUSFS requirement for <=92, NOT a temp context fix — never revert
             if [[ "$CURRENT_SUB" -le 57 ]]; then
               echo "还原 Android 15 6.6 memory.c 临时调整"
               sed -i '/^#include <linux\/zswap.h>$/d' mm/memory.c
