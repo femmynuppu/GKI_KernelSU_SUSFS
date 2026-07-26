@@ -1466,20 +1466,14 @@ jobs:
       # ==================== 添加 TCP BBR 拥塞控制 ====================
       - name: 添加 TCP BBR 配置
         run: |
-          if ! grep -q '^CONFIG_TCP_CONG_BBR=y' "$DEFCONFIG"; then
-            # 6.6+ requires CONFIG_TCP_CONG_ADVANCED to make BBR visible in Kconfig
-            if [ "${{ inputs.kernel_version }}" = "6.6" ] || [ "${{ inputs.kernel_version }}" = "6.12" ]; then
-              grep -q '^CONFIG_TCP_CONG_ADVANCED=y' "$DEFCONFIG" || echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$DEFCONFIG"
-            fi
-            cat >> "$DEFCONFIG" << 'EOF'
+          cat >> "$DEFCONFIG" << 'EOF'
+          CONFIG_TCP_CONG_ADVANCED=y
           CONFIG_TCP_CONG_BBR=y
+          CONFIG_DEFAULT_BBR=y
           CONFIG_DEFAULT_TCP_CONG="bbr"
           CONFIG_NET_SCH_FQ=y
           EOF
-            echo "已启用 TCP BBR 拥塞控制"
-          else
-            echo "TCP BBR 已启用，跳过。"
-          fi
+          echo "已启用 TCP BBR 拥塞控制"
 
       # ==================== 添加 SUSFS 配置 ====================
       # 启用 SUSFS 各项隐藏功能
@@ -1647,6 +1641,14 @@ jobs:
               tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast $LTO_FLAG $FRAG_FLAG //common:kernel_aarch64_dist || exit 1
               strings ./bazel-bin/common/kernel_aarch64/Image | grep 'Linux version'
             fi
+
+            if [ -f "build/build.sh" ]; then
+              FINAL_IMAGE="out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist/Image"
+            else
+              FINAL_IMAGE="bazel-bin/common/kernel_aarch64/Image"
+            fi
+            common/scripts/extract-ikconfig "$FINAL_IMAGE" > /tmp/final-kernel.config
+            bash "$GITHUB_WORKSPACE/build-helpers/verify-bbr-config.sh" /tmp/final-kernel.config
 
             echo "一般情况下不会出错，除非KSU仓库和SUSFS仓库代码不同。"
             echo "不要问，不要急，这跟你怎么努力，或者跟我反馈没关系，因为这跟我无关。"
