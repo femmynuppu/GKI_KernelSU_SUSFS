@@ -70,6 +70,11 @@ on:
         default: "Sun Dec 01 08:10:00 UTC 2024"
 
       # ==================== 功能开关 ====================
+      use_kpm:
+        description: "启用 KPM / KernelPatch 支持"
+        required: false
+        type: boolean
+        default: false
       use_zram:
         description: "启用 ZRAM 增强算法"
         required: true
@@ -141,6 +146,7 @@ jobs:
       ksu_branch: ${{ inputs.kernelsu_branch }}
       version: ${{ inputs.version || '' }}
       build_time: ${{ inputs.build_time || '' }}
+      use_kpm: ${{ inputs.use_kpm }}
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
       use_rekernel: ${{ inputs.use_rekernel || false }}
@@ -154,4 +160,7 @@ jobs:
 
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml
+    with:
+      use_kpm: ${{ inputs.use_kpm }}
+      resukisu_commit: 3ef06b0fcb0960dc9563256fe26a58e892663387
     secrets: inherit

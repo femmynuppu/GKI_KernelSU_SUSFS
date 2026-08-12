@@ -53,6 +53,10 @@ on:
         default: "Sun Dec 01 08:10:00 UTC 2024"
 
       # ==================== 功能开关 ====================
+      use_kpm:
+        required: false
+        type: boolean
+        default: false
       use_zram:
         required: true
         type: boolean
@@ -108,6 +112,13 @@ jobs:
       CCACHE_HARDLINK: "true"
 
     steps:
+      # ==================== 检出仓库代码 ====================
+      - name: 检出代码仓库
+        uses: actions/checkout@v6
+
+      - name: 验证 KPM 构建范围
+        run: bash build-helpers/validate-kpm-recipe.sh "${{ inputs.use_kpm }}" "${{ inputs.android_version }}" "${{ inputs.kernel_version }}" "${{ inputs.sub_level }}" "${{ inputs.add_nomount }}" "${{ inputs.add_zeromount }}"
+
       # ==================== 构建信息摘要 ====================
       # 打印当前构建的所有配置信息，方便调试和追踪
       - name: 构建信息摘要
@@ -149,10 +160,6 @@ jobs:
           rm_cmd: "rmz"
           rmz_version: "3.1.1"
           testing: false
-
-      # ==================== 检出仓库代码 ====================
-      - name: 检出代码仓库
-        uses: actions/checkout@v6
 
       # ==================== 初始化构建环境 ====================
       # 设置各种路径变量，包括内核源码、补丁、工具等目录

@@ -10,6 +10,14 @@ permissions:
 
 on:
   workflow_call: # This allows this workflow to be called from another workflow
+    inputs:
+      use_kpm:
+        required: false
+        type: boolean
+        default: false
+      resukisu_commit:
+        required: false
+        type: string
     outputs:
       susVer:
         description: "The fetched SUSFS version number"
