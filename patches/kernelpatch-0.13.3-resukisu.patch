@@ -1,0 +1,190 @@
+diff --git a/kernel/Makefile b/kernel/Makefile
+index 41effdd..c2e4fa0 100644
+--- a/kernel/Makefile
++++ b/kernel/Makefile
+@@ -71,6 +71,7 @@ BASE_SRCS += $(wildcard patch/*.c)
+ BASE_SRCS += $(wildcard patch/common/*.c)
+ BASE_SRCS += $(wildcard patch/module/*.c)
+ BASE_SRCS += $(wildcard patch/ksyms/*.c)
++BASE_SRCS += $(wildcard patch/sukisu/*.c)
+ 
+ ifdef ANDROID
+ 	BASE_SRCS += $(wildcard patch/android/*.c)
+diff --git a/kernel/patch/patch.c b/kernel/patch/patch.c
+index 4937c16..6b51a30 100644
+--- a/kernel/patch/patch.c
++++ b/kernel/patch/patch.c
+@@ -60,6 +60,8 @@ int android_user_init();
+ int android_sepolicy_flags_fix();
+ #endif
+ 
++int init_sukisu_bridge(void);
++
+ static void before_rest_init(hook_fargs4_t *args, void *udata)
+ {
+     int rc = 0;
+@@ -89,6 +91,10 @@ static void before_rest_init(hook_fargs4_t *args, void *udata)
+     rc = su_compat_init();
+     log_boot("su_compat_init done: %d\n", rc);
+ 
++    rc = init_sukisu_bridge();
++    log_boot("init_sukisu_bridge done: %d\n", rc);
++    if (rc) goto out;
++
+     rc = resolve_pt_regs();
+     log_boot("resolve_pt_regs done: %d\n", rc);
+ 
+diff --git a/kernel/patch/sukisu/sukisu.c b/kernel/patch/sukisu/sukisu.c
+new file mode 100644
+index 0000000..ee38097
+--- /dev/null
++++ b/kernel/patch/sukisu/sukisu.c
+@@ -0,0 +1,148 @@
++#include <common.h>
++#include <hook.h>
++#include <kallsyms.h>
++#include <log.h>
++#include <module.h>
++#include <predata.h>
++#include <linux/printk.h>
++#include <linux/kernel.h>
++#include <linux/uaccess.h>
++#include <uapi/asm-generic/errno.h>
++
++static void before_sukisu_load_module_path(hook_fargs4_t *args, void *udata)
++{
++    const char *path = (const char *)args->arg0;
++    const char *module_args = (const char *)args->arg1;
++    void *reserved = (void *)args->arg2;
++    int *result = (int *)args->arg3;
++
++    *result = (int)load_module_path(path, module_args, reserved);
++    args->skip_origin = 1;
++}
++
++static void before_sukisu_unload_module(hook_fargs3_t *args, void *udata)
++{
++    const char *name = (const char *)args->arg0;
++    void *reserved = (void *)args->arg1;
++    int *result = (int *)args->arg2;
++
++    *result = (int)unload_module(name, reserved);
++    args->skip_origin = 1;
++}
++
++static void before_sukisu_kpm_num(hook_fargs1_t *args, void *udata)
++{
++    int *result = (int *)args->arg0;
++
++    *result = get_module_nums();
++    args->skip_origin = 1;
++}
++
++static void before_sukisu_kpm_list(hook_fargs3_t *args, void *udata)
++{
++    char *out = (char *)args->arg0;
++    int len = (int)args->arg1;
++    int *result = (int *)args->arg2;
++
++    *result = list_modules(out, len);
++    args->skip_origin = 1;
++}
++
++static void before_sukisu_kpm_info(hook_fargs4_t *args, void *udata)
++{
++    const char *name = (const char *)args->arg0;
++    char *out = (char *)args->arg1;
++    int len = (int)args->arg2;
++    int *result = (int *)args->arg3;
++
++    *result = get_module_info(name, out, len);
++    args->skip_origin = 1;
++}
++
++static void before_sukisu_kpm_control(hook_fargs4_t *args, void *udata)
++{
++    const char *name = (const char *)args->arg0;
++    const char *module_args = (const char *)args->arg1;
++    long arg_len = (long)args->arg2;
++    int *result = (int *)args->arg3;
++
++    if (arg_len <= 0 || arg_len >= KPM_ARGS_LEN)
++        *result = -EINVAL;
++    else
++        *result = (int)module_control0(name, module_args, 0, 0);
++    args->skip_origin = 1;
++}
++
++static void before_sukisu_kpm_version(hook_fargs2_t *args, void *udata)
++{
++    char *out = (char *)args->arg0;
++    int len = (int)args->arg1;
++
++    if (len > 0)
++        snprintf(out, len, "%d (%s)", kpver, get_build_time());
++    args->skip_origin = 1;
++}
++
++struct sukisu_hook {
++    const char *symbol;
++    void *before;
++    int argc;
++};
++
++static const struct sukisu_hook sukisu_hooks[] = {
++    { "sukisu_load_module_path", before_sukisu_load_module_path, 4 },
++    { "sukisu_unload_module", before_sukisu_unload_module, 3 },
++    { "sukisu_kpm_num", before_sukisu_kpm_num, 1 },
++    { "sukisu_kpm_list", before_sukisu_kpm_list, 3 },
++    { "sukisu_kpm_info", before_sukisu_kpm_info, 4 },
++    { "sukisu_kpm_control", before_sukisu_kpm_control, 4 },
++    { "sukisu_kpm_version", before_sukisu_kpm_version, 2 },
++};
++
++int init_sukisu_bridge(void)
++{
++    unsigned int i;
++
++    for (i = 0; i < sizeof(sukisu_hooks) / sizeof(sukisu_hooks[0]); i++) {
++        const struct sukisu_hook *hook = &sukisu_hooks[i];
++        unsigned long addr = kallsyms_lookup_name(hook->symbol);
++        hook_err_t rc;
++
++        if (!addr) {
++            log_boot("missing required ReSukiSU symbol: %s\n", hook->symbol);
++            return -1;
++        }
++
++        switch (hook->argc) {
++        case 1:
++            rc = hook_wrap1((void *)addr, before_sukisu_kpm_num, 0, 0);
++            break;
++        case 2:
++            rc = hook_wrap2((void *)addr, before_sukisu_kpm_version, 0, 0);
++            break;
++        case 3:
++            if (hook->before == before_sukisu_unload_module)
++                rc = hook_wrap3((void *)addr, before_sukisu_unload_module, 0, 0);
++            else
++                rc = hook_wrap3((void *)addr, before_sukisu_kpm_list, 0, 0);
++            break;
++        case 4:
++            if (hook->before == before_sukisu_load_module_path)
++                rc = hook_wrap4((void *)addr, before_sukisu_load_module_path, 0, 0);
++            else if (hook->before == before_sukisu_kpm_info)
++                rc = hook_wrap4((void *)addr, before_sukisu_kpm_info, 0, 0);
++            else
++                rc = hook_wrap4((void *)addr, before_sukisu_kpm_control, 0, 0);
++            break;
++        default:
++            return -1;
++        }
++
++        if (rc) {
++            log_boot("failed to hook required ReSukiSU symbol %s: %d\n", hook->symbol, rc);
++            return rc;
++        }
++    }
++
++    return 0;
++}

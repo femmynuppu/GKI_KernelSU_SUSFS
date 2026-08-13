@@ -27,6 +27,10 @@ on:
         description: "The calculated KSU version number"
         value: ${{ jobs.get_ksu_manager.outputs.ksuVer }}
 
+      managerCommit:
+        description: "The ReSukiSU source commit used for the Manager"
+        value: ${{ jobs.get_ksu_manager.outputs.managerCommit }}
+
 jobs:
   get_ksu_manager:
     runs-on: ubuntu-latest
@@ -35,6 +39,7 @@ jobs:
       ksuVer: ${{ steps.get_version.outputs.kversion }}
       # 输出2: SUSFS版本号
       susVer: ${{ steps.get_version.outputs.sversion }}
+      managerCommit: ${{ steps.get_version.outputs.managerCommit }}
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
@@ -65,6 +70,12 @@ jobs:
           echo " "
           echo "======================================================="
           
+      - name: Checkout KPM integration sources
+        if: ${{ inputs.use_kpm }}
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
       - name: 安装依赖
         run: |
           sudo apt-get update
@@ -74,27 +85,80 @@ jobs:
         id: get_version
         run: |
           echo "This is the ReSukiSU variant"
-          git clone https://github.com/ReSukiSU/ReSukiSU.git KernelSU
+          if [ "${{ inputs.use_kpm }}" = "true" ]; then
+            source "$GITHUB_WORKSPACE/config/kpm.config"
+            if [ "${{ inputs.resukisu_commit }}" != "$RESUKISU_CURRENT" ]; then
+              echo "ReSukiSU Manager commit mismatch: expected $RESUKISU_CURRENT" >&2
+              exit 1
+            fi
+            git clone --filter=blob:none --no-checkout https://github.com/ReSukiSU/ReSukiSU.git ReSukiSU
+            git -C ReSukiSU checkout "$RESUKISU_CURRENT"
+          else
+            git clone https://github.com/ReSukiSU/ReSukiSU.git ReSukiSU
+          fi
 
-          cd KernelSU
+          cd ReSukiSU
+          RESOLVED_COMMIT=$(git rev-parse HEAD)
 
           # 计算KSU版本号
           KSU_GIT_VERSION=$(git rev-list --count HEAD)
           KSU_VERSION=$((30700 + KSU_GIT_VERSION))
-          echo $KSU_VERSION
-          echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
+          echo "$KSU_VERSION"
+          echo "KSU_VERSION=$KSU_VERSION" >> "$GITHUB_ENV"
 
           # 计算SUSFS版本号
           INFO="https://gitlab.com/simonpunk/susfs4ksu/-/raw/gki-android14-6.1/ksu_module_susfs/module.prop\?ref_type\=heads"
-          SUS_VERSION=$(curl -s $INFO | awk -F '=' '$1 == "version" { print $2 }')
-          echo $SUS_VERSION
+          SUS_VERSION=$(curl -s "$INFO" | awk -F '=' '$1 == "version" { print $2 }')
+          echo "$SUS_VERSION"
 
-          # 导出这两个值给release
-          echo "kversion=$KSU_VERSION" >> $GITHUB_OUTPUT
-          echo "sversion=$SUS_VERSION" >> $GITHUB_OUTPUT
+          # 导出版本和可追溯源码提交
+          echo "kversion=$KSU_VERSION" >> "$GITHUB_OUTPUT"
+          echo "sversion=$SUS_VERSION" >> "$GITHUB_OUTPUT"
+          echo "managerCommit=$RESOLVED_COMMIT" >> "$GITHUB_OUTPUT"
+      - name: Setup Java for KPM Manager
+        if: ${{ inputs.use_kpm }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle for KPM Manager
+        if: ${{ inputs.use_kpm }}
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Setup Android SDK for KPM Manager
+        if: ${{ inputs.use_kpm }}
+        uses: android-actions/setup-android@v4
+
+      - name: 构建匹配 KPM Manager
+        id: build_kpm_manager
+        if: ${{ inputs.use_kpm }}
+        run: |
+          set -euo pipefail
+          source "$GITHUB_WORKSPACE/config/kpm.config"
+          git -C ReSukiSU submodule update --init --recursive
+          bash "$GITHUB_WORKSPACE/build-helpers/apply-resukisu-kpm.sh" "$GITHUB_WORKSPACE/ReSukiSU"
+          cd ReSukiSU/manager
+          chmod +x gradlew
+          ./gradlew assembleRelease -Pcommit="$RESUKISU_CURRENT"
+          cd "$GITHUB_WORKSPACE"
+
+          mkdir -p manager-artifacts/kpm
+          mapfile -t APKS < <(find ReSukiSU/manager/app/build/outputs/apk/release -type f -name '*.apk' -print)
+          [ "${#APKS[@]}" -gt 0 ] || {
+            echo "KPM Manager build produced no release APK" >&2
+            exit 1
+          }
+          cp "${APKS[@]}" manager-artifacts/kpm/
+          (
+            cd manager-artifacts/kpm
+            sha256sum ./*.apk > ReSukiSU-Manager-KPM.sha256
+          )
+
 
       - name: 添加 KernelSU
         id: add_KSU
+        if: ${{ !inputs.use_kpm }}
         continue-on-error: true
         run: |
           echo "ReSukiSU..."
@@ -197,8 +261,16 @@ jobs:
         if: steps.add_KSU.outcome == 'failure'
         run: echo "下载CI构建的KSU失败!"
 
+      - name: 上传匹配 KPM Manager
+        if: ${{ inputs.use_kpm && steps.build_kpm_manager.outcome == 'success' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ReSukiSU-Manager-KPM
+          path: manager-artifacts/kpm/*
+          if-no-files-found: error
+
       - name: 上传APK
-        if: steps.add_KSU.outcome == 'success'
+        if: ${{ !inputs.use_kpm && steps.add_KSU.outcome == 'success' }}
         uses: actions/upload-artifact@v6
         with:
           name: ReSukiSU-Manager(${{ env.KSU_VERSION }})

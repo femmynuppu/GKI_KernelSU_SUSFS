@@ -1,0 +1,2573 @@
+diff --git a/kernel/Kbuild b/kernel/Kbuild
+index 4ac11d61..80e479e3 100644
+--- a/kernel/Kbuild
++++ b/kernel/Kbuild
+@@ -35,6 +35,12 @@ kernelsu-objs += supercall/dispatch.o
+ kernelsu-objs += supercall/perm.o
+ kernelsu-objs += supercall/supercall.o
+ 
++ifdef CONFIG_KPM
++kernelsu-objs += kpm/kpm.o
++kernelsu-objs += kpm/compact.o
++kernelsu-objs += kpm/super_access.o
++endif
++
+ ifdef CONFIG_ARM64
+ kernelsu-objs += compat/apatch_conflict.o
+ endif
+@@ -193,6 +199,14 @@ else
+   endif
+ endif
+ 
++# Check if KPM is enabled
++ifdef CONFIG_KPM
++  $(info -- KPM is enabled)
++  $(info -- WARNING, This feature is unstable!!! You are WARNED!!!)
++else
++  $(info -- KPM is disabled)
++endif
++
+ ifndef CONFIG_KSU_TRACEPOINT_HOOK
+   # For old kernel, pkg observer maybe let system freeze
+   # https://github.com/ReSukiSU/ReSukiSU/issues/82#issuecomment-4015396974
+diff --git a/kernel/Kconfig b/kernel/Kconfig
+index 45f87e42..521512f2 100644
+--- a/kernel/Kconfig
++++ b/kernel/Kconfig
+@@ -77,6 +77,17 @@ config KSU_MULTI_MANAGER_SUPPORT
+ 	help
+ 		Enable multi KernelSU manager support
+ 
++config KPM
++    bool "Enable SukiSU KPM"
++    depends on KSU && 64BIT
++    select KALLSYMS
++    select KALLSYMS_ALL
++    default n
++    help
++	  Enabling this option will activate the KPM feature of SukiSU.
++	  This option is suitable for scenarios where you need to force KPM to be enabled.
++	  but it may affect system stability.
++
+ choice
+ 	prompt "KernelSU Hooking Method"
+ 	depends on KSU
+diff --git a/kernel/kpm/compact.c b/kernel/kpm/compact.c
+new file mode 100644
+index 00000000..4ea58824
+--- /dev/null
++++ b/kernel/kpm/compact.c
+@@ -0,0 +1,87 @@
++#include <linux/export.h>
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/fs.h>
++#include <linux/kernfs.h>
++#include <linux/file.h>
++#include <linux/slab.h>
++#include <linux/vmalloc.h>
++#include <linux/uaccess.h>
++#include <linux/elf.h>
++#include <linux/kallsyms.h>
++#include <linux/version.h>
++#include <linux/list.h>
++#include <linux/spinlock.h>
++#include <linux/rcupdate.h>
++#include <asm/elf.h>
++#include <linux/vmalloc.h>
++#include <linux/mm.h>
++#include <linux/string.h>
++#include <asm/cacheflush.h>
++#include <linux/module.h>
++#include <linux/vmalloc.h>
++#include <linux/set_memory.h>
++#include <linux/version.h>
++#include <linux/export.h>
++#include <linux/slab.h>
++#include "kpm.h"
++#include "compact.h"
++#include "policy/allowlist.h"
++#include "manager/manager_identity.h"
++
++static int sukisu_is_su_allow_uid(uid_t uid)
++{
++    return ksu_is_allow_uid_for_current(uid) ? 1 : 0;
++}
++
++static int sukisu_get_ap_mod_exclude(uid_t uid)
++{
++    return 0; /* Not supported */
++}
++
++static int sukisu_is_uid_should_umount(uid_t uid)
++{
++    return ksu_uid_should_umount(uid) ? 1 : 0;
++}
++
++static int sukisu_is_current_uid_manager(void)
++{
++    return is_manager();
++}
++
++struct CompactAddressSymbol {
++    const char *symbol_name;
++    void *addr;
++};
++
++unsigned long sukisu_compact_find_symbol(const char *name);
++
++static struct CompactAddressSymbol address_symbol[] = {
++    { "kallsyms_lookup_name", &kallsyms_lookup_name },
++    { "compact_find_symbol", &sukisu_compact_find_symbol },
++    { "is_run_in_sukisu_ultra", (void *)1 },
++    { "is_su_allow_uid", &sukisu_is_su_allow_uid },
++    { "get_ap_mod_exclude", &sukisu_get_ap_mod_exclude },
++    { "is_uid_should_umount", &sukisu_is_uid_should_umount },
++    { "is_current_uid_manager", &sukisu_is_current_uid_manager },
++};
++
++unsigned long sukisu_compact_find_symbol(const char *name)
++{
++    int i;
++    unsigned long addr;
++
++    for (i = 0; i < (sizeof(address_symbol) / sizeof(struct CompactAddressSymbol)); i++) {
++        struct CompactAddressSymbol *symbol = &address_symbol[i];
++
++        if (strcmp(name, symbol->symbol_name) == 0)
++            return (unsigned long)symbol->addr;
++    }
++
++    addr = kallsyms_lookup_name(name);
++    if (addr)
++        return addr;
++
++    return 0;
++}
++EXPORT_SYMBOL(sukisu_compact_find_symbol);
+diff --git a/kernel/kpm/compact.h b/kernel/kpm/compact.h
+new file mode 100644
+index 00000000..c9f69dce
+--- /dev/null
++++ b/kernel/kpm/compact.h
+@@ -0,0 +1,6 @@
++#ifndef __SUKISU_KPM_COMPACT_H
++#define __SUKISU_KPM_COMPACT_H
++
++extern unsigned long sukisu_compact_find_symbol(const char *name);
++
++#endif
+diff --git a/kernel/kpm/kpm.c b/kernel/kpm/kpm.c
+new file mode 100644
+index 00000000..f69e4c5f
+--- /dev/null
++++ b/kernel/kpm/kpm.c
+@@ -0,0 +1,284 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * Copyright (C) 2025 Liankong (xhsw.new@outlook.com). All Rights Reserved.
++ * 本代码由GPL-2授权
++ *
++ * 适配KernelSU的KPM 内核模块加载器兼容实现
++ *
++ * 集成了 ELF 解析、内存布局、符号处理、重定位（支持 ARM64 重定位类型）
++ * 并参照KernelPatch的标准KPM格式实现加载和控制
++ */
++
++#include <linux/kernel.h>
++#include <linux/fs.h>
++#include <linux/kernfs.h>
++#include <linux/file.h>
++#include <linux/vmalloc.h>
++#include <linux/uaccess.h>
++#include <linux/elf.h>
++#include <linux/kallsyms.h>
++#include <linux/version.h>
++#include <linux/list.h>
++#include <linux/spinlock.h>
++#include <linux/rcupdate.h>
++#include <asm/elf.h>
++#include <linux/mm.h>
++#include <linux/string.h>
++#include <asm/cacheflush.h>
++#include <linux/module.h>
++#include <linux/set_memory.h>
++#include <linux/export.h>
++#include <linux/slab.h>
++#include <asm/insn.h>
++#include <linux/kprobes.h>
++#include <linux/stacktrace.h>
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0) && defined(CONFIG_MODULES)
++#include <linux/moduleloader.h>
++#endif
++#include "kpm.h"
++#include "compact.h"
++#include "compat/kernel_compat.h"
++#include "uapi/supercall.h"
++
++#define KPM_NAME_LEN 32
++#define KPM_ARGS_LEN 1024
++
++#ifndef NO_OPTIMIZE
++#if defined(__GNUC__) && !defined(__clang__)
++#define NO_OPTIMIZE __attribute__((optimize("O0")))
++#elif defined(__clang__)
++#define NO_OPTIMIZE __attribute__((optnone))
++#else
++#define NO_OPTIMIZE
++#endif
++#endif
++
++noinline NO_OPTIMIZE void sukisu_load_module_path(const char *path, const char *args, void *ptr, int *result)
++{
++    pr_info("kpm: Stub function called (sukisu_load_module_path). "
++            "path=%s args=%s ptr=%p\n",
++            path, args, ptr);
++
++    __asm__ volatile("nop");
++}
++EXPORT_SYMBOL(sukisu_load_module_path);
++
++noinline NO_OPTIMIZE void sukisu_unload_module(const char *name, void *ptr, int *result)
++{
++    pr_info("kpm: Stub function called (sukisu_unload_module). "
++            "name=%s ptr=%p\n",
++            name, ptr);
++
++    __asm__ volatile("nop");
++}
++EXPORT_SYMBOL(sukisu_unload_module);
++
++noinline NO_OPTIMIZE void sukisu_kpm_num(int *result)
++{
++    pr_info("kpm: Stub function called (sukisu_kpm_num).\n");
++
++    __asm__ volatile("nop");
++}
++EXPORT_SYMBOL(sukisu_kpm_num);
++
++noinline NO_OPTIMIZE void sukisu_kpm_info(const char *name, char *buf, int bufferSize, int *size)
++{
++    pr_info("kpm: Stub function called (sukisu_kpm_info). "
++            "name=%s buffer=%p\n",
++            name, buf);
++
++    __asm__ volatile("nop");
++}
++EXPORT_SYMBOL(sukisu_kpm_info);
++
++noinline NO_OPTIMIZE void sukisu_kpm_list(void *out, int bufferSize, int *result)
++{
++    pr_info("kpm: Stub function called (sukisu_kpm_list). "
++            "buffer=%p size=%d\n",
++            out, bufferSize);
++}
++EXPORT_SYMBOL(sukisu_kpm_list);
++
++noinline NO_OPTIMIZE void sukisu_kpm_control(const char *name, const char *args, long arg_len, int *result)
++{
++    pr_info("kpm: Stub function called (sukisu_kpm_control). "
++            "name=%p args=%p arg_len=%ld\n",
++            name, args, arg_len);
++
++    __asm__ volatile("nop");
++}
++EXPORT_SYMBOL(sukisu_kpm_control);
++
++noinline NO_OPTIMIZE void sukisu_kpm_version(char *buf, int bufferSize)
++{
++    pr_info("kpm: Stub function called (sukisu_kpm_version). "
++            "buffer=%p\n",
++            buf);
++}
++EXPORT_SYMBOL(sukisu_kpm_version);
++
++noinline int sukisu_handle_kpm(unsigned long control_code, unsigned long arg1, unsigned long arg2,
++                               unsigned long result_code)
++{
++    int res = -1;
++    if (control_code == SUKISU_KPM_LOAD) {
++        char kernel_load_path[256] = { 0 };
++        char kernel_args_buffer[256] = { 0 };
++
++        if (arg1 == 0) {
++            res = -EINVAL;
++            goto exit;
++        }
++
++        if (!ksu_access_ok(arg1, sizeof(kernel_load_path))) {
++            goto invalid_arg;
++        }
++
++        strncpy_from_user((char *)&kernel_load_path, (const char *)arg1, sizeof(kernel_load_path));
++
++        if (arg2 != 0) {
++            if (!ksu_access_ok(arg2, sizeof(kernel_args_buffer))) {
++                goto invalid_arg;
++            }
++
++            strncpy_from_user((char *)&kernel_args_buffer, (const char *)arg2, sizeof(kernel_args_buffer));
++        }
++
++        sukisu_load_module_path((const char *)&kernel_load_path, (const char *)&kernel_args_buffer, NULL, &res);
++    } else if (control_code == SUKISU_KPM_UNLOAD) {
++        char kernel_name_buffer[256] = { 0 };
++
++        if (arg1 == 0) {
++            res = -EINVAL;
++            goto exit;
++        }
++
++        if (!ksu_access_ok(arg1, sizeof(kernel_name_buffer))) {
++            goto invalid_arg;
++        }
++
++        strncpy_from_user((char *)&kernel_name_buffer, (const char *)arg1, sizeof(kernel_name_buffer));
++
++        sukisu_unload_module((const char *)&kernel_name_buffer, NULL, &res);
++    } else if (control_code == SUKISU_KPM_NUM) {
++        sukisu_kpm_num(&res);
++    } else if (control_code == SUKISU_KPM_INFO) {
++        char kernel_name_buffer[256] = { 0 };
++        char buf[256] = { 0 };
++        int size;
++
++        if (arg1 == 0 || arg2 == 0) {
++            res = -EINVAL;
++            goto exit;
++        }
++
++        if (!ksu_access_ok(arg1, sizeof(kernel_name_buffer))) {
++            goto invalid_arg;
++        }
++
++        strncpy_from_user((char *)&kernel_name_buffer, (const char __user *)arg1, sizeof(kernel_name_buffer));
++
++        sukisu_kpm_info((const char *)&kernel_name_buffer, (char *)&buf, sizeof(buf), &size);
++
++        if (!ksu_access_ok(arg2, size)) {
++            goto invalid_arg;
++        }
++
++        res = copy_to_user(arg2, &buf, size);
++
++    } else if (control_code == SUKISU_KPM_LIST) {
++        char buf[1024] = { 0 };
++        int len = (int)arg2;
++
++        if (len <= 0 || len > sizeof(buf)) {
++            res = -EINVAL;
++            goto exit;
++        }
++
++        if (!ksu_access_ok(arg1, len)) {
++            goto invalid_arg;
++        }
++
++        sukisu_kpm_list((char *)&buf, sizeof(buf), &res);
++
++        if (res > len) {
++            res = -ENOBUFS;
++            goto exit;
++        }
++
++        if (copy_to_user(arg1, &buf, len) != 0)
++            res = -EFAULT;
++
++    } else if (control_code == SUKISU_KPM_CONTROL) {
++        char kpm_name[KPM_NAME_LEN] = { 0 };
++        char kpm_args[KPM_ARGS_LEN] = { 0 };
++
++        if (!ksu_access_ok(arg1, sizeof(kpm_name))) {
++            goto invalid_arg;
++        }
++
++        if (!ksu_access_ok(arg2, sizeof(kpm_args))) {
++            goto invalid_arg;
++        }
++
++        long name_len = strncpy_from_user((char *)&kpm_name, (const char __user *)arg1, sizeof(kpm_name));
++        if (name_len <= 0 || name_len >= sizeof(kpm_name)) {
++            res = -EINVAL;
++            goto exit;
++        }
++
++        long arg_len = strncpy_from_user((char *)&kpm_args, (const char __user *)arg2, sizeof(kpm_args));
++        if (arg_len <= 0 || arg_len >= sizeof(kpm_args)) {
++            res = -EINVAL;
++            goto exit;
++        }
++
++        sukisu_kpm_control((const char *)&kpm_name, (const char *)&kpm_args, arg_len, &res);
++
++    } else if (control_code == SUKISU_KPM_VERSION) {
++        char buffer[256] = { 0 };
++
++        sukisu_kpm_version((char *)&buffer, sizeof(buffer));
++
++        unsigned int outlen = (unsigned int)arg2;
++        int len = strlen(buffer);
++        if (len >= outlen)
++            len = outlen - 1;
++
++        res = copy_to_user(arg1, &buffer, len + 1);
++    }
++
++exit:
++    if (copy_to_user(result_code, &res, sizeof(res)) != 0)
++        pr_info("kpm: Copy to user failed.");
++
++    return 0;
++invalid_arg:
++    pr_err("kpm: invalid pointer detected! arg1: %px arg2: %px\n", (void *)arg1, (void *)arg2);
++    res = -EFAULT;
++    goto exit;
++}
++EXPORT_SYMBOL(sukisu_handle_kpm);
++
++int sukisu_is_kpm_control_code(unsigned long control_code)
++{
++    return (control_code >= CMD_KPM_CONTROL && control_code <= CMD_KPM_CONTROL_MAX) ? 1 : 0;
++}
++
++int do_kpm(void __user *arg)
++{
++    struct ksu_kpm_cmd cmd;
++
++    if (copy_from_user(&cmd, arg, sizeof(cmd))) {
++        pr_err("kpm: copy_from_user failed\n");
++        return -EFAULT;
++    }
++
++
++    if (!ksu_access_ok(cmd.result_code, sizeof(int))) {
++        pr_err("kpm: invalid result_code pointer %px\n", (void *)cmd.result_code);
++        return -EFAULT;
++    }
++
++    return sukisu_handle_kpm(cmd.control_code, cmd.arg1, cmd.arg2, cmd.result_code);
++}
+diff --git a/kernel/kpm/kpm.h b/kernel/kpm/kpm.h
+new file mode 100644
+index 00000000..a5c43fb0
+--- /dev/null
++++ b/kernel/kpm/kpm.h
+@@ -0,0 +1,15 @@
++#ifndef __SUKISU_KPM_H
++#define __SUKISU_KPM_H
++
++#include <linux/types.h>
++#include <linux/ioctl.h>
++
++int sukisu_handle_kpm(unsigned long control_code, unsigned long arg1, unsigned long arg2, unsigned long result_code);
++int sukisu_is_kpm_control_code(unsigned long control_code);
++int do_kpm(void __user *arg);
++
++/* KPM Control Code */
++#define CMD_KPM_CONTROL 1
++#define CMD_KPM_CONTROL_MAX 10
++
++#endif
+diff --git a/kernel/kpm/super_access.c b/kernel/kpm/super_access.c
+new file mode 100644
+index 00000000..8dc5ab21
+--- /dev/null
++++ b/kernel/kpm/super_access.c
+@@ -0,0 +1,278 @@
++#include <linux/export.h>
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/fs.h>
++#include <linux/kernfs.h>
++#include <linux/file.h>
++#include <linux/slab.h>
++#include <linux/vmalloc.h>
++#include <linux/uaccess.h>
++#include <linux/elf.h>
++#include <linux/kallsyms.h>
++#include <linux/version.h>
++#include <linux/list.h>
++#include <linux/spinlock.h>
++#include <linux/rcupdate.h>
++#include <asm/elf.h>
++#include <linux/vmalloc.h>
++#include <linux/mm.h>
++#include <linux/string.h>
++#include <asm/cacheflush.h>
++#include <linux/module.h>
++#include <linux/vmalloc.h>
++#include <linux/set_memory.h>
++#include <linux/version.h>
++#include <linux/export.h>
++#include <linux/slab.h>
++#include <linux/types.h>
++#include <linux/stddef.h>
++#include <linux/mount.h>
++#include <linux/kprobes.h>
++#include <linux/mm_types.h>
++#include <linux/netlink.h>
++#include <linux/sched.h>
++#include <../fs/mount.h>
++#include "kpm.h"
++#include "compact.h"
++
++struct DynamicStructMember {
++    const char *name;
++    size_t size;
++    size_t offset;
++};
++
++struct DynamicStructInfo {
++    const char *name;
++    size_t count;
++    size_t total_size;
++    struct DynamicStructMember *members;
++};
++
++#define DYNAMIC_STRUCT_BEGIN(struct_name) static struct DynamicStructMember struct_name##_members[] = {
++#define DEFINE_MEMBER(struct_name, member)                                                                             \
++    { .name = #member,                                                                                                 \
++      .size = sizeof(((struct struct_name *)0)->member),                                                               \
++      .offset = offsetof(struct struct_name, member) },
++
++#define DYNAMIC_STRUCT_END(struct_name)                                                                                \
++    }                                                                                                                  \
++    ;                                                                                                                  \
++    static struct DynamicStructInfo struct_name##_info = { .name = #struct_name,                                       \
++                                                           .count = sizeof(struct_name##_members) /                    \
++                                                                    sizeof(struct DynamicStructMember),                \
++                                                           .total_size = sizeof(struct struct_name),                   \
++                                                           .members = struct_name##_members };
++
++DYNAMIC_STRUCT_BEGIN(mount)
++DEFINE_MEMBER(mount, mnt_parent)
++DEFINE_MEMBER(mount, mnt)
++DEFINE_MEMBER(mount, mnt_id)
++DEFINE_MEMBER(mount, mnt_group_id)
++DEFINE_MEMBER(mount, mnt_expiry_mark)
++DEFINE_MEMBER(mount, mnt_master)
++DEFINE_MEMBER(mount, mnt_devname)
++DYNAMIC_STRUCT_END(mount)
++
++DYNAMIC_STRUCT_BEGIN(vfsmount)
++DEFINE_MEMBER(vfsmount, mnt_root)
++DEFINE_MEMBER(vfsmount, mnt_sb)
++DEFINE_MEMBER(vfsmount, mnt_flags)
++DYNAMIC_STRUCT_END(vfsmount)
++
++DYNAMIC_STRUCT_BEGIN(mnt_namespace)
++DEFINE_MEMBER(mnt_namespace, ns)
++DEFINE_MEMBER(mnt_namespace, root)
++DEFINE_MEMBER(mnt_namespace, seq)
++DEFINE_MEMBER(mnt_namespace, mounts)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
++DEFINE_MEMBER(mnt_namespace, count)
++#endif
++DYNAMIC_STRUCT_END(mnt_namespace)
++
++#ifdef CONFIG_KPROBES
++DYNAMIC_STRUCT_BEGIN(kprobe)
++DEFINE_MEMBER(kprobe, addr)
++DEFINE_MEMBER(kprobe, symbol_name)
++DEFINE_MEMBER(kprobe, offset)
++DEFINE_MEMBER(kprobe, pre_handler)
++DEFINE_MEMBER(kprobe, post_handler)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
++DEFINE_MEMBER(kprobe, fault_handler)
++#endif
++DEFINE_MEMBER(kprobe, flags)
++DYNAMIC_STRUCT_END(kprobe)
++#endif
++
++DYNAMIC_STRUCT_BEGIN(vm_area_struct)
++DEFINE_MEMBER(vm_area_struct, vm_start)
++DEFINE_MEMBER(vm_area_struct, vm_end)
++DEFINE_MEMBER(vm_area_struct, vm_flags)
++DEFINE_MEMBER(vm_area_struct, anon_vma)
++DEFINE_MEMBER(vm_area_struct, vm_pgoff)
++DEFINE_MEMBER(vm_area_struct, vm_file)
++DEFINE_MEMBER(vm_area_struct, vm_private_data)
++#ifdef CONFIG_ANON_VMA_NAME
++DEFINE_MEMBER(vm_area_struct, anon_name)
++#endif
++DEFINE_MEMBER(vm_area_struct, vm_ops)
++DYNAMIC_STRUCT_END(vm_area_struct)
++
++DYNAMIC_STRUCT_BEGIN(vm_operations_struct)
++DEFINE_MEMBER(vm_operations_struct, open)
++DEFINE_MEMBER(vm_operations_struct, close)
++DEFINE_MEMBER(vm_operations_struct, name)
++DEFINE_MEMBER(vm_operations_struct, access)
++DYNAMIC_STRUCT_END(vm_operations_struct)
++
++DYNAMIC_STRUCT_BEGIN(netlink_kernel_cfg)
++DEFINE_MEMBER(netlink_kernel_cfg, groups)
++DEFINE_MEMBER(netlink_kernel_cfg, flags)
++DEFINE_MEMBER(netlink_kernel_cfg, input)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
++DEFINE_MEMBER(netlink_kernel_cfg, cb_mutex)
++#endif
++DEFINE_MEMBER(netlink_kernel_cfg, bind)
++DEFINE_MEMBER(netlink_kernel_cfg, unbind)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
++DEFINE_MEMBER(netlink_kernel_cfg, compare)
++#endif
++DYNAMIC_STRUCT_END(netlink_kernel_cfg)
++
++DYNAMIC_STRUCT_BEGIN(task_struct)
++DEFINE_MEMBER(task_struct, pid)
++DEFINE_MEMBER(task_struct, tgid)
++DEFINE_MEMBER(task_struct, cred)
++DEFINE_MEMBER(task_struct, real_cred)
++DEFINE_MEMBER(task_struct, comm)
++DEFINE_MEMBER(task_struct, parent)
++DEFINE_MEMBER(task_struct, group_leader)
++DEFINE_MEMBER(task_struct, mm)
++DEFINE_MEMBER(task_struct, active_mm)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
++DEFINE_MEMBER(task_struct, pids[PIDTYPE_PID].pid)
++#else
++DEFINE_MEMBER(task_struct, thread_pid)
++#endif
++DEFINE_MEMBER(task_struct, files)
++DEFINE_MEMBER(task_struct, seccomp)
++#ifdef CONFIG_THREAD_INFO_IN_TASK
++DEFINE_MEMBER(task_struct, thread_info)
++#endif
++#ifdef CONFIG_CGROUPS
++DEFINE_MEMBER(task_struct, cgroups)
++#endif
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
++#ifdef CONFIG_SECURITY
++DEFINE_MEMBER(task_struct, security)
++#endif
++#endif
++DEFINE_MEMBER(task_struct, thread)
++DYNAMIC_STRUCT_END(task_struct)
++
++#define STRUCT_INFO(name) &(name##_info)
++
++static struct DynamicStructInfo *dynamic_struct_infos[] = { STRUCT_INFO(mount),
++                                                            STRUCT_INFO(vfsmount),
++                                                            STRUCT_INFO(mnt_namespace),
++#ifdef CONFIG_KPROBES
++                                                            STRUCT_INFO(kprobe),
++#endif
++                                                            STRUCT_INFO(vm_area_struct),
++                                                            STRUCT_INFO(vm_operations_struct),
++                                                            STRUCT_INFO(netlink_kernel_cfg),
++                                                            STRUCT_INFO(task_struct) };
++
++/*
++ * return 0 if successful
++ * return -1 if struct not defined
++ */
++int sukisu_super_find_struct(const char *struct_name, size_t *out_size, int *out_members)
++{
++    size_t i; // for C89 standard or later
++    for (i = 0; i < (sizeof(dynamic_struct_infos) / sizeof(dynamic_struct_infos[0])); i++) {
++        struct DynamicStructInfo *info = dynamic_struct_infos[i];
++
++        if (strcmp(struct_name, info->name) == 0) {
++            if (out_size)
++                *out_size = info->total_size;
++
++            if (out_members)
++                *out_members = info->count;
++
++            return 0;
++        }
++    }
++
++    return -1;
++}
++EXPORT_SYMBOL(sukisu_super_find_struct);
++
++/*
++ * Dynamic access struct
++ * return 0 if successful
++ * return -1 if struct not defined
++ * return -2 if member not defined
++ */
++int sukisu_super_access(const char *struct_name, const char *member_name, size_t *out_offset, size_t *out_size)
++{
++    size_t i; // for C89 standard or later
++    for (i = 0; i < (sizeof(dynamic_struct_infos) / sizeof(dynamic_struct_infos[0])); i++) {
++        struct DynamicStructInfo *info = dynamic_struct_infos[i];
++
++        if (strcmp(struct_name, info->name) == 0) {
++            size_t i1; // for C89 standard or later
++            for (i1 = 0; i1 < info->count; i1++) {
++                if (strcmp(info->members[i1].name, member_name) == 0) {
++                    if (out_offset)
++                        *out_offset = info->members[i].offset;
++
++                    if (out_size)
++                        *out_size = info->members[i].size;
++
++                    return 0;
++                }
++            }
++
++            return -2;
++        }
++    }
++
++    return -1;
++}
++EXPORT_SYMBOL(sukisu_super_access);
++
++#define DYNAMIC_CONTAINER_OF(offset, member_ptr)                                                                       \
++    ({ (offset != (size_t) - 1) ? (void *)((char *)(member_ptr) - offset) : NULL; })
++
++/*
++ * Dynamic container_of
++ * return 0 if success
++ * return -1 if current struct not defined
++ * return -2 if target member not defined
++ */
++int sukisu_super_container_of(const char *struct_name, const char *member_name, void *ptr, void **out_ptr)
++{
++    if (ptr == NULL)
++        return -3;
++
++    size_t i; // for C89 standard or later
++    for (i = 0; i < (sizeof(dynamic_struct_infos) / sizeof(dynamic_struct_infos[0])); i++) {
++        struct DynamicStructInfo *info = dynamic_struct_infos[i];
++
++        if (strcmp(struct_name, info->name) == 0) {
++            size_t i1; // for C89 standard or later
++            for (i1 = 0; i1 < info->count; i1++) {
++                if (strcmp(info->members[i1].name, member_name) == 0) {
++                    *out_ptr = (void *)DYNAMIC_CONTAINER_OF(info->members[i1].offset, ptr);
++
++                    return 0;
++                }
++            }
++
++            return -2;
++        }
++    }
++
++    return -1;
++}
++EXPORT_SYMBOL(sukisu_super_container_of);
+diff --git a/kernel/kpm/super_access.h b/kernel/kpm/super_access.h
+new file mode 100644
+index 00000000..a5500458
+--- /dev/null
++++ b/kernel/kpm/super_access.h
+@@ -0,0 +1,13 @@
++#ifndef __SUKISU_SUPER_ACCESS_H
++#define __SUKISU_SUPER_ACCESS_H
++
++#include <linux/types.h>
++#include <linux/stddef.h>
++#include "kpm.h"
++#include "compact.h"
++
++extern int sukisu_super_find_struct(const char *struct_name, size_t *out_size, int *out_members);
++extern int sukisu_super_access(const char *struct_name, const char *member_name, size_t *out_offset, size_t *out_size);
++extern int sukisu_super_container_of(const char *struct_name, const char *member_name, void *ptr, void **out_ptr);
++
++#endif
+\ No newline at end of file
+diff --git a/kernel/supercall/dispatch.c b/kernel/supercall/dispatch.c
+index 242b5711..197caf22 100644
+--- a/kernel/supercall/dispatch.c
++++ b/kernel/supercall/dispatch.c
+@@ -27,6 +27,9 @@
+ #endif
+ #include "feature/dynamic_manager.h"
+ #include "policy/app_profile.h"
++#ifdef CONFIG_KPM
++#include "kpm/kpm.h"
++#endif
+ 
+ #ifdef CONFIG_KSU_TOOLKIT_SUPPORT
+ #include <linux/utsname.h> // utsname() and uts_sem
+@@ -913,6 +916,21 @@ static int do_get_hook_type(void __user *arg)
+     return 0;
+ }
+ 
++// 102. ENABLE_KPM - Check if KPM is enabled
++static int do_enable_kpm(void __user *arg)
++{
++    struct ksu_enable_kpm_cmd cmd;
++
++    cmd.enabled = IS_ENABLED(CONFIG_KPM);
++
++    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
++        pr_err("enable_kpm: copy_to_user failed\n");
++        return -EFAULT;
++    }
++
++    return 0;
++}
++
+ static int do_dynamic_manager(void __user *arg)
+ {
+ #ifdef CONFIG_KSU_DISABLE_MANAGER
+@@ -1349,7 +1367,13 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
+         .handler = do_get_hook_type, 
+         .perm_check = manager_or_root 
+     },
+-    { 
++    {
++        .cmd = KSU_IOCTL_ENABLE_KPM,
++        .name = "GET_ENABLE_KPM",
++        .handler = do_enable_kpm,
++        .perm_check = manager_or_root
++    },
++    {
+         .cmd = KSU_IOCTL_DYNAMIC_MANAGER,
+         .name = "SET_DYNAMIC_MANAGER",
+         .handler = do_dynamic_manager,
+@@ -1367,6 +1391,14 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
+         .handler = do_get_kernel_patch_implement, 
+         .perm_check = manager_or_root 
+     },
++#ifdef CONFIG_KPM
++    {
++        .cmd = KSU_IOCTL_KPM,
++        .name = "KPM_OPERATION",
++        .handler = do_kpm,
++        .perm_check = manager_or_root
++    },
++#endif
+     { 
+         .cmd = 0, 
+         .name = NULL, 
+diff --git a/manager/app/src/main/cpp/jni.c b/manager/app/src/main/cpp/jni.c
+index 7a2df392..034595ed 100644
+--- a/manager/app/src/main/cpp/jni.c
++++ b/manager/app/src/main/cpp/jni.c
+@@ -530,6 +530,11 @@ NativeBridge(getUserName, jstring, jint uid) {
+     return NULL;
+ }
+ 
++// Check if KPM is enabled
++NativeBridgeNP(isKPMEnabled, jboolean) {
++	return is_KPM_enable();
++}
++
+ // Get HOOK type
+ NativeBridgeNP(getHookType, jstring) {
+     char hook_type[32] = { 0 };
+diff --git a/manager/app/src/main/cpp/ksu.c b/manager/app/src/main/cpp/ksu.c
+index 1b3e1400..30390a5a 100644
+--- a/manager/app/src/main/cpp/ksu.c
++++ b/manager/app/src/main/cpp/ksu.c
+@@ -279,6 +279,13 @@ void get_full_version(char* buff) {
+ 	}
+ }
+ 
++bool is_KPM_enable(void) {
++    struct ksu_enable_kpm_cmd cmd = {};
++    if (ksuctl(KSU_IOCTL_ENABLE_KPM, &cmd) == 0 && cmd.enabled) {
++        return true;
++    }
++    return legacy_is_KPM_enable();
++}
+ 
+ void get_hook_type(char *buff) {
+     struct ksu_hook_type_cmd cmd = {0};
+diff --git a/manager/app/src/main/cpp/ksu.h b/manager/app/src/main/cpp/ksu.h
+index 4c4c05d4..1dea6f08 100644
+--- a/manager/app/src/main/cpp/ksu.h
++++ b/manager/app/src/main/cpp/ksu.h
+@@ -36,7 +36,9 @@ bool set_app_profile(const struct app_profile *profile);
+ 
+ int get_app_profile(struct app_profile* profile);
+ 
+-void get_hook_type(char *buff);
++bool is_KPM_enable();
++
++void get_hook_type(char* hook_type);
+ 
+ int get_kernel_patch_implement();
+ 
+@@ -82,6 +84,7 @@ bool legacy_set_app_profile(const struct app_profile* profile);
+ bool legacy_get_app_profile(char* key, struct app_profile* profile);
+ bool legacy_set_su_enabled(bool enabled);
+ bool legacy_is_su_enabled();
++bool legacy_is_KPM_enable();
+ bool legacy_get_hook_type(char* hook_type, size_t size);
+ void legacy_get_full_version(char* buff);
+ 
+diff --git a/manager/app/src/main/cpp/legacy.c b/manager/app/src/main/cpp/legacy.c
+index 0cb185bc..ed747b54 100644
+--- a/manager/app/src/main/cpp/legacy.c
++++ b/manager/app/src/main/cpp/legacy.c
+@@ -88,6 +88,11 @@ bool legacy_is_su_enabled() {
+     return enabled;
+ }
+ 
++bool legacy_is_KPM_enable() {
++    int enabled = false;
++    ksuctl(CMD_ENABLE_KPM, &enabled, NULL);
++    return enabled;
++}
+ 
+ bool legacy_get_hook_type(char* hook_type, size_t size) {
+     if (hook_type == NULL || size == 0) {
+diff --git a/manager/app/src/main/java/com/resukisu/resukisu/Natives.kt b/manager/app/src/main/java/com/resukisu/resukisu/Natives.kt
+index e692339b..bb413b59 100644
+--- a/manager/app/src/main/java/com/resukisu/resukisu/Natives.kt
++++ b/manager/app/src/main/java/com/resukisu/resukisu/Natives.kt
+@@ -152,6 +152,8 @@ object Natives {
+      */
+     external fun isSelinuxHideEnabled(): Boolean
+     external fun setSelinuxHideEnabled(enabled: Boolean): Int
++    external fun isKPMEnabled(): Boolean
++
+ 
+     external fun getHookType(): String
+ 
+diff --git a/manager/app/src/main/java/com/resukisu/resukisu/ui/navigation/Routes.kt b/manager/app/src/main/java/com/resukisu/resukisu/ui/navigation/Routes.kt
+index ea5830fd..ac9eebb9 100644
+--- a/manager/app/src/main/java/com/resukisu/resukisu/ui/navigation/Routes.kt
++++ b/manager/app/src/main/java/com/resukisu/resukisu/ui/navigation/Routes.kt
+@@ -43,6 +43,10 @@ sealed interface Route : NavKey, Parcelable {
+     @Parcelize
+     @Serializable
+     data object Module : Route
++    @Parcelize
++    @Serializable
++    data object Kpm : Route
++
+ 
+     @Parcelize
+     @Serializable
+diff --git a/manager/app/src/main/java/com/resukisu/resukisu/ui/screen/BottomBarDestination.kt b/manager/app/src/main/java/com/resukisu/resukisu/ui/screen/BottomBarDestination.kt
+index 292283cb..93a9ce0f 100644
+--- a/manager/app/src/main/java/com/resukisu/resukisu/ui/screen/BottomBarDestination.kt
++++ b/manager/app/src/main/java/com/resukisu/resukisu/ui/screen/BottomBarDestination.kt
+@@ -2,6 +2,7 @@ package com.resukisu.resukisu.ui.screen
+ 
+ import androidx.annotation.StringRes
+ import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.twotone.Archive
+ import androidx.compose.material.icons.twotone.AdminPanelSettings
+ import androidx.compose.material.icons.twotone.Extension
+ import androidx.compose.material.icons.twotone.Home
+@@ -12,9 +13,11 @@ import androidx.compose.ui.unit.Dp
+ import com.resukisu.resukisu.R
+ import com.resukisu.resukisu.ui.component.ksuIsValid
+ import com.resukisu.resukisu.ui.screen.main.HomePage
++import com.resukisu.resukisu.ui.screen.main.KpmPage
+ import com.resukisu.resukisu.ui.screen.main.ModulePage
+ import com.resukisu.resukisu.ui.screen.main.SettingsPage
+ import com.resukisu.resukisu.ui.screen.main.SuperUserPage
++import com.resukisu.resukisu.ui.util.getKpmVersion
+ 
+ enum class BottomBarDestination(
+     val direction: @Composable (bottomPadding: Dp) -> Unit,
+@@ -30,6 +33,13 @@ enum class BottomBarDestination(
+         Icons.TwoTone.Home,
+         false
+     ),
++    Kpm(
++        { bottomPadding -> KpmPage(bottomPadding) },
++        R.string.kpm_title,
++        Icons.TwoTone.Archive,
++        Icons.TwoTone.Archive,
++        true
++    ),
+     SuperUser(
+         { bottomPadding -> SuperUserPage(bottomPadding) },
+         R.string.superuser,
+@@ -55,8 +65,9 @@ enum class BottomBarDestination(
+     companion object {
+         fun getPages(): List<BottomBarDestination> {
+             return if (ksuIsValid()) {
+-                // 全功能管理器
+-                BottomBarDestination.entries.toList()
++                BottomBarDestination.entries.filter {
++                    it != Kpm || runCatching { getKpmVersion().isNotEmpty() }.getOrDefault(false)
++                }
+             } else {
+                 BottomBarDestination.entries.filter {
+                     !it.rootRequired
+diff --git a/manager/app/src/main/java/com/resukisu/resukisu/ui/screen/main/KpmPage.kt b/manager/app/src/main/java/com/resukisu/resukisu/ui/screen/main/KpmPage.kt
+new file mode 100644
+index 00000000..81f0d7a1
+--- /dev/null
++++ b/manager/app/src/main/java/com/resukisu/resukisu/ui/screen/main/KpmPage.kt
+@@ -0,0 +1,817 @@
++package com.resukisu.resukisu.ui.screen.main
++
++import android.app.Activity
++import android.content.Context
++import android.content.Intent
++import android.util.Log
++import androidx.activity.compose.rememberLauncherForActivityResult
++import androidx.activity.result.contract.ActivityResultContracts
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Box
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.PaddingValues
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.WindowInsets
++import androidx.compose.foundation.layout.WindowInsetsSides
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.only
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.safeDrawing
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.items
++import androidx.compose.foundation.lazy.rememberLazyListState
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.filled.Close
++import androidx.compose.material.icons.filled.Code
++import androidx.compose.material.icons.filled.Delete
++import androidx.compose.material.icons.filled.Download
++import androidx.compose.material.icons.filled.Info
++import androidx.compose.material.icons.filled.Inventory
++import androidx.compose.material.icons.filled.Refresh
++import androidx.compose.material.icons.filled.Settings
++import androidx.compose.material3.AlertDialog
++import androidx.compose.material3.Button
++import androidx.compose.material3.ButtonDefaults
++import androidx.compose.material3.Card
++import androidx.compose.material3.ExperimentalMaterial3Api
++import androidx.compose.material3.FloatingActionButton
++import androidx.compose.material3.Icon
++import androidx.compose.material3.IconButton
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.OutlinedTextField
++import androidx.compose.material3.Scaffold
++import androidx.compose.material3.SnackbarDuration
++import androidx.compose.material3.SnackbarHostState
++import androidx.compose.material3.Text
++import androidx.compose.material3.TextButton
++import androidx.compose.material3.TopAppBarDefaults
++import androidx.compose.material3.rememberTopAppBarState
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.LaunchedEffect
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.rememberCoroutineScope
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.res.painterResource
++import androidx.compose.ui.res.stringResource
++import androidx.compose.ui.text.style.TextAlign
++import androidx.compose.ui.unit.Dp
++import androidx.compose.ui.unit.dp
++import androidx.core.content.edit
++import androidx.lifecycle.viewmodel.compose.viewModel
++import com.resukisu.resukisu.R
++import com.resukisu.resukisu.ui.component.AnimatedFab
++import com.resukisu.resukisu.ui.component.ConfirmDialogHandle
++import com.resukisu.resukisu.ui.component.ConfirmResult
++import com.resukisu.resukisu.ui.component.SearchAppBar
++import com.resukisu.resukisu.ui.component.SwipeableSnackbarHost
++import com.resukisu.resukisu.ui.component.rememberConfirmDialog
++import com.resukisu.resukisu.ui.component.rememberCustomDialog
++import com.resukisu.resukisu.ui.component.rememberFabVisibilityState
++import com.resukisu.resukisu.ui.theme.blurSource
++import com.resukisu.resukisu.ui.theme.getCardColors
++import com.resukisu.resukisu.ui.theme.getCardElevation
++import com.resukisu.resukisu.ui.util.LocalSnackbarHost
++import com.resukisu.resukisu.ui.util.getRootShell
++import com.resukisu.resukisu.ui.util.loadKpmModule
++import com.resukisu.resukisu.ui.util.unloadKpmModule
++import com.resukisu.resukisu.ui.viewmodel.KpmViewModel
++import kotlinx.coroutines.launch
++import java.io.File
++import java.io.FileInputStream
++import java.net.URLEncoder
++
++/**
++ * @author ShirkNeko, liankong
++ * @date 2025/3/30
++ */
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++fun KpmPage(bottomPadding: Dp) {
++    val viewModel: KpmViewModel = viewModel<KpmViewModel>()
++    val context = LocalContext.current
++    val scope = rememberCoroutineScope()
++    val snackBarHost = LocalSnackbarHost.current
++    val confirmDialog = rememberConfirmDialog()
++
++    val listState = rememberLazyListState()
++    val fabVisible by rememberFabVisibilityState(listState)
++
++    val moduleConfirmContentMap = viewModel.moduleList.associate { module ->
++        val moduleFileName = module.id
++        module.id to stringResource(R.string.confirm_uninstall_content, moduleFileName)
++    }
++
++    val topAppBarState = rememberTopAppBarState()
++    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(topAppBarState)
++
++    val kpmInstallSuccess = stringResource(R.string.kpm_install_success)
++    val kpmInstallFailed = stringResource(R.string.kpm_install_failed)
++    val cancel = stringResource(R.string.cancel)
++    val uninstall = stringResource(R.string.uninstall)
++    val failedToCheckModuleFile = stringResource(R.string.snackbar_failed_to_check_module_file)
++    val kpmUninstallSuccess = stringResource(R.string.kpm_uninstall_success)
++    val kpmUninstallFailed = stringResource(R.string.kpm_uninstall_failed)
++    val kpmInstallMode = stringResource(R.string.kpm_install_mode)
++    val kpmInstallModeLoad = stringResource(R.string.kpm_install_mode_load)
++    val kpmInstallModeEmbed = stringResource(R.string.kpm_install_mode_embed)
++    val invalidFileTypeMessage = stringResource(R.string.invalid_file_type)
++    val confirmTitle = stringResource(R.string.confirm_uninstall_title_with_filename)
++
++    var tempFileForInstall by remember { mutableStateOf<File?>(null) }
++    val installModeDialog = rememberCustomDialog { dismiss ->
++        var moduleName by remember { mutableStateOf<String?>(null) }
++
++        LaunchedEffect(tempFileForInstall) {
++            tempFileForInstall?.let { tempFile ->
++                try {
++                    val shell = getRootShell()
++                    val command = "strings ${tempFile.absolutePath} | grep 'name='"
++                    val result = shell.newJob().add(command).to(ArrayList(), null).exec()
++                    if (result.isSuccess) {
++                        for (line in result.out) {
++                            if (line.startsWith("name=")) {
++                                moduleName = line.substringAfter("name=").trim()
++                                break
++                            }
++                        }
++                    }
++                } catch (e: Exception) {
++                    Log.e("KsuCli", "Failed to get module name: ${e.message}", e)
++                }
++            }
++        }
++
++        AlertDialog(
++            onDismissRequest = {
++                dismiss()
++                tempFileForInstall?.delete()
++                tempFileForInstall = null
++            },
++            title = {
++                Text(
++                    text = kpmInstallMode,
++                    style = MaterialTheme.typography.headlineSmall,
++                )
++            },
++            text = {
++                Column {
++                    moduleName?.let {
++                        Text(
++                            text = stringResource(R.string.kpm_install_mode_description, it),
++                            style = MaterialTheme.typography.bodyMedium,
++                        )
++                    }
++                    Spacer(modifier = Modifier.height(16.dp))
++                    Column(
++                        verticalArrangement = Arrangement.spacedBy(8.dp)
++                    ) {
++                        Button(
++                            onClick = {
++                                scope.launch {
++                                    dismiss()
++                                    tempFileForInstall?.let { tempFile ->
++                                        handleModuleInstall(
++                                            tempFile = tempFile,
++                                            isEmbed = false,
++                                            viewModel = viewModel,
++                                            snackBarHost = snackBarHost,
++                                            kpmInstallSuccess = kpmInstallSuccess,
++                                            kpmInstallFailed = kpmInstallFailed
++                                        )
++                                    }
++                                    tempFileForInstall = null
++                                }
++                            },
++                            modifier = Modifier.fillMaxWidth(),
++                        ) {
++                            Icon(
++                                imageVector = Icons.Filled.Download,
++                                contentDescription = null,
++                                modifier = Modifier
++                                    .size(18.dp)
++                                    .padding(end = 4.dp)
++                            )
++                            Text(kpmInstallModeLoad)
++                        }
++
++                        Button(
++                            onClick = {
++                                scope.launch {
++                                    dismiss()
++                                    tempFileForInstall?.let { tempFile ->
++                                        handleModuleInstall(
++                                            tempFile = tempFile,
++                                            isEmbed = true,
++                                            viewModel = viewModel,
++                                            snackBarHost = snackBarHost,
++                                            kpmInstallSuccess = kpmInstallSuccess,
++                                            kpmInstallFailed = kpmInstallFailed
++                                        )
++                                    }
++                                    tempFileForInstall = null
++                                }
++                            },
++                            modifier = Modifier.fillMaxWidth(),
++                        ) {
++                            Icon(
++                                imageVector = Icons.Filled.Inventory,
++                                contentDescription = null,
++                                modifier = Modifier
++                                    .size(18.dp)
++                                    .padding(end = 4.dp)
++                            )
++                            Text(kpmInstallModeEmbed)
++                        }
++                    }
++                }
++            },
++            confirmButton = {
++            },
++            dismissButton = {
++                Column(
++                    modifier = Modifier.fillMaxWidth(),
++                    horizontalAlignment = Alignment.CenterHorizontally
++                ) {
++                    Spacer(modifier = Modifier.height(16.dp))
++                    TextButton(
++                        onClick = {
++                            dismiss()
++                            tempFileForInstall?.delete()
++                            tempFileForInstall = null
++                        }
++                    ) {
++                        Text(cancel)
++                    }
++                }
++            },
++            shape = MaterialTheme.shapes.extraLarge
++        )
++    }
++
++    val selectPatchLauncher = rememberLauncherForActivityResult(
++        contract = ActivityResultContracts.StartActivityForResult()
++    ) { result ->
++        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
++
++        val uri = result.data?.data ?: return@rememberLauncherForActivityResult
++
++        scope.launch {
++            val fileName = uri.lastPathSegment ?: "unknown.kpm"
++            val encodedFileName = URLEncoder.encode(fileName, "UTF-8")
++            val tempFile = File(context.cacheDir, encodedFileName)
++
++            context.contentResolver.openInputStream(uri)?.use { input ->
++                tempFile.outputStream().use { output ->
++                    input.copyTo(output)
++                }
++            }
++
++            val mimeType = context.contentResolver.getType(uri)
++            val isCorrectMimeType = mimeType == null || mimeType.contains("application/octet-stream")
++
++            if (!isCorrectMimeType) {
++                var shouldShowSnackbar = true
++                try {
++                    val matchCount = checkStringsCommand(tempFile)
++                    val isElf = isElfFile(tempFile)
++
++                    if (matchCount >= 1 || isElf) {
++                        shouldShowSnackbar = false
++                    }
++                } catch (e: Exception) {
++                    Log.e("KsuCli", "Failed to execute checks: ${e.message}", e)
++                }
++                if (shouldShowSnackbar) {
++                    snackBarHost.showSnackbar(
++                        message = invalidFileTypeMessage,
++                        duration = SnackbarDuration.Short
++                    )
++                }
++                tempFile.delete()
++                return@launch
++            }
++            tempFileForInstall = tempFile
++            installModeDialog.show()
++        }
++    }
++
++    LaunchedEffect(Unit) {
++        viewModel.fetchModuleList()
++    }
++
++    val sharedPreferences = context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
++    var isNoticeClosed by remember { mutableStateOf(sharedPreferences.getBoolean("is_notice_closed", false)) }
++
++    Scaffold(
++        topBar = {
++            SearchAppBar(
++                title = stringResource(R.string.kpm_title),
++                searchText = viewModel.search,
++                onSearchTextChange = { viewModel.search = it },
++                scrollBehavior = scrollBehavior,
++                dropdownContent = {
++                    IconButton(
++                        onClick = { viewModel.fetchModuleList() }
++                    ) {
++                        Icon(
++                            imageVector = Icons.Filled.Refresh,
++                            contentDescription = stringResource(R.string.refresh),
++                        )
++                    }
++                },
++                searchBarPlaceHolderText = stringResource(R.string.search_modules),
++            )
++        },
++        floatingActionButton = {
++            AnimatedFab(
++                visible = fabVisible,
++                modifier = Modifier.padding(bottom = bottomPadding)
++            ) {
++                FloatingActionButton(
++                    contentColor = MaterialTheme.colorScheme.onPrimary,
++                    containerColor = MaterialTheme.colorScheme.primary,
++                    onClick = {
++                        selectPatchLauncher.launch(
++                            Intent(Intent.ACTION_GET_CONTENT).apply {
++                                type = "application/octet-stream"
++                            }
++                        )
++                    },
++                    content = {
++                        Icon(
++                            painter = painterResource(id = R.drawable.package_import),
++                            contentDescription = null
++                        )
++                    }
++                )
++            }
++        },
++        containerColor = Color.Transparent,
++        contentColor = MaterialTheme.colorScheme.onSurface,
++        contentWindowInsets = WindowInsets.safeDrawing.only(
++            WindowInsetsSides.Top + WindowInsetsSides.Horizontal
++        ),
++        snackbarHost = {
++            SwipeableSnackbarHost(
++                modifier = if (!fabVisible) {
++                    Modifier.padding(bottom = bottomPadding)
++                } else Modifier,
++                hostState = snackBarHost
++            )
++        }
++    ) { innerPadding ->
++        Column(
++            modifier = Modifier
++                .fillMaxSize()
++                .blurSource(),
++        ) {
++            Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding()))
++            if (!isNoticeClosed) {
++                Card(
++                    modifier = Modifier
++                        .fillMaxWidth()
++                        .padding(16.dp)
++                        .clip(MaterialTheme.shapes.medium)
++                ) {
++                    Row(
++                        modifier = Modifier
++                            .fillMaxWidth()
++                            .padding(16.dp),
++                        horizontalArrangement = Arrangement.SpaceBetween,
++                        verticalAlignment = Alignment.CenterVertically
++                    ) {
++                        Icon(
++                            imageVector = Icons.Filled.Info,
++                            contentDescription = null,
++                            modifier = Modifier
++                                .padding(end = 16.dp)
++                                .size(24.dp)
++                        )
++
++                        Text(
++                            text = stringResource(R.string.kernel_module_notice),
++                            modifier = Modifier.weight(1f),
++                            style = MaterialTheme.typography.bodyMedium,
++                        )
++
++                        IconButton(
++                            onClick = {
++                                isNoticeClosed = true
++                                sharedPreferences.edit { putBoolean("is_notice_closed", true) }
++                            },
++                            modifier = Modifier.size(24.dp),
++                        ) {
++                            Icon(
++                                imageVector = Icons.Filled.Close,
++                                contentDescription = stringResource(R.string.close_notice)
++                            )
++                        }
++                    }
++                }
++            }
++
++            if (viewModel.moduleList.isEmpty()) {
++                Box(
++                    modifier = Modifier.fillMaxSize(),
++                    contentAlignment = Alignment.Center
++                ) {
++                    Column(
++                        horizontalAlignment = Alignment.CenterHorizontally,
++                        verticalArrangement = Arrangement.Center
++                    ) {
++                        Icon(
++                            imageVector = Icons.Filled.Code,
++                            contentDescription = null,
++                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
++                            modifier = Modifier
++                                .size(96.dp)
++                                .padding(bottom = 16.dp)
++                        )
++                        Text(
++                            stringResource(R.string.kpm_empty),
++                            textAlign = TextAlign.Center,
++                            style = MaterialTheme.typography.bodyLarge,
++                        )
++                    }
++                }
++            } else {
++                LazyColumn(
++                    state = listState,
++                    modifier = Modifier.fillMaxSize(),
++                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
++                    verticalArrangement = Arrangement.spacedBy(16.dp)
++                ) {
++                    items(viewModel.moduleList) { module ->
++                        KpmModuleItem(
++                            module = module,
++                            onUninstall = {
++                                scope.launch {
++                                    val confirmContent = moduleConfirmContentMap[module.id] ?: ""
++                                    handleModuleUninstall(
++                                        module = module,
++                                        viewModel = viewModel,
++                                        snackBarHost = snackBarHost,
++                                        kpmUninstallSuccess = kpmUninstallSuccess,
++                                        kpmUninstallFailed = kpmUninstallFailed,
++                                        failedToCheckModuleFile = failedToCheckModuleFile,
++                                        uninstall = uninstall,
++                                        cancel = cancel,
++                                        confirmDialog = confirmDialog,
++                                        confirmTitle = confirmTitle,
++                                        confirmContent = confirmContent
++                                    )
++                                }
++                            },
++                            onControl = {
++                                viewModel.loadModuleDetail(module.id)
++                            }
++                        )
++                    }
++
++                    item {
++                        Spacer(modifier = Modifier.height(bottomPadding))
++                    }
++                }
++            }
++        }
++    }
++}
++
++private suspend fun handleModuleInstall(
++    tempFile: File,
++    isEmbed: Boolean,
++    viewModel: KpmViewModel,
++    snackBarHost: SnackbarHostState,
++    kpmInstallSuccess: String,
++    kpmInstallFailed: String
++) {
++    var moduleId: String? = null
++    try {
++        val shell = getRootShell()
++        val command = "strings ${tempFile.absolutePath} | grep 'name='"
++        val result = shell.newJob().add(command).to(ArrayList(), null).exec()
++        if (result.isSuccess) {
++            for (line in result.out) {
++                if (line.startsWith("name=")) {
++                    moduleId = line.substringAfter("name=").trim()
++                    break
++                }
++            }
++        }
++    } catch (e: Exception) {
++        Log.e("KsuCli", "Failed to get module ID from strings command: ${e.message}", e)
++    }
++
++    if (moduleId == null || moduleId.isEmpty()) {
++        Log.e("KsuCli", "Failed to extract module ID from file: ${tempFile.name}")
++        snackBarHost.showSnackbar(
++            message = kpmInstallFailed,
++            duration = SnackbarDuration.Short
++        )
++        tempFile.delete()
++        return
++    }
++
++    val targetPath = "/data/adb/kpm/$moduleId.kpm"
++
++    try {
++        if (isEmbed) {
++            val shell = getRootShell()
++            shell.newJob().add("mkdir -p /data/adb/kpm").exec()
++            shell.newJob().add("cp ${tempFile.absolutePath} $targetPath").exec()
++        }
++
++        val loadResult = loadKpmModule(tempFile.absolutePath)
++        if (loadResult.startsWith("Error")) {
++            Log.e("KsuCli", "Failed to load KPM module: $loadResult")
++            snackBarHost.showSnackbar(
++                message = kpmInstallFailed,
++                duration = SnackbarDuration.Short
++            )
++        } else {
++            viewModel.fetchModuleList()
++            snackBarHost.showSnackbar(
++                message = kpmInstallSuccess,
++                duration = SnackbarDuration.Short
++            )
++        }
++    } catch (e: Exception) {
++        Log.e("KsuCli", "Failed to load KPM module: ${e.message}", e)
++        snackBarHost.showSnackbar(
++            message = kpmInstallFailed,
++            duration = SnackbarDuration.Short
++        )
++    }
++    tempFile.delete()
++}
++
++private suspend fun handleModuleUninstall(
++    module: KpmViewModel.ModuleInfo,
++    viewModel: KpmViewModel,
++    snackBarHost: SnackbarHostState,
++    kpmUninstallSuccess: String,
++    kpmUninstallFailed: String,
++    failedToCheckModuleFile: String,
++    uninstall: String,
++    cancel: String,
++    confirmTitle : String,
++    confirmContent : String,
++    confirmDialog: ConfirmDialogHandle
++) {
++    val moduleFileName = "${module.id}.kpm"
++    val moduleFilePath = "/data/adb/kpm/$moduleFileName"
++
++    val fileExists = try {
++        val shell = getRootShell()
++        val result = shell.newJob().add("ls /data/adb/kpm/$moduleFileName").exec()
++        result.isSuccess
++    } catch (e: Exception) {
++        Log.e("KsuCli", "Failed to check module file existence: ${e.message}", e)
++        snackBarHost.showSnackbar(
++            message = failedToCheckModuleFile,
++            duration = SnackbarDuration.Short
++        )
++        false
++    }
++
++    val confirmResult = confirmDialog.awaitConfirm(
++        title = confirmTitle,
++        content = confirmContent,
++        confirm = uninstall,
++        dismiss = cancel
++    )
++
++    if (confirmResult == ConfirmResult.Confirmed) {
++        try {
++            val unloadResult = unloadKpmModule(module.id)
++            if (unloadResult.startsWith("Error")) {
++                Log.e("KsuCli", "Failed to unload KPM module: $unloadResult")
++                snackBarHost.showSnackbar(
++                    message = kpmUninstallFailed,
++                    duration = SnackbarDuration.Short
++                )
++                return
++            }
++
++            if (fileExists) {
++                val shell = getRootShell()
++                shell.newJob().add("rm $moduleFilePath").exec()
++            }
++
++            viewModel.fetchModuleList()
++            snackBarHost.showSnackbar(
++                message = kpmUninstallSuccess,
++                duration = SnackbarDuration.Short
++            )
++        } catch (e: Exception) {
++            Log.e("KsuCli", "Failed to unload KPM module: ${e.message}", e)
++            snackBarHost.showSnackbar(
++                message = kpmUninstallFailed,
++                duration = SnackbarDuration.Short
++            )
++        }
++    }
++}
++
++@Composable
++private fun KpmModuleItem(
++    module: KpmViewModel.ModuleInfo,
++    onUninstall: () -> Unit,
++    onControl: () -> Unit
++) {
++    val viewModel: KpmViewModel = viewModel()
++    val scope = rememberCoroutineScope()
++    val snackBarHost = remember { SnackbarHostState() }
++    val successMessage = stringResource(R.string.kpm_control_success)
++    val failureMessage = stringResource(R.string.kpm_control_failed)
++
++    if (viewModel.showInputDialog && viewModel.selectedModuleId == module.id) {
++        AlertDialog(
++            onDismissRequest = { viewModel.hideInputDialog() },
++            title = {
++                Text(
++                    text = stringResource(R.string.kpm_control),
++                    style = MaterialTheme.typography.headlineSmall,
++                )
++            },
++            text = {
++                OutlinedTextField(
++                    value = viewModel.inputArgs,
++                    onValueChange = { viewModel.updateInputArgs(it) },
++                    label = {
++                        Text(
++                            text = stringResource(R.string.kpm_args),
++                        )
++                    },
++                    placeholder = {
++                        Text(
++                            text = module.args,
++                        )
++                    },
++                    modifier = Modifier.fillMaxWidth(),
++                )
++            },
++            confirmButton = {
++                TextButton(
++                    onClick = {
++                        scope.launch {
++                            val result = viewModel.executeControl()
++                            val message = when (result) {
++                                0 -> successMessage
++                                else -> failureMessage
++                            }
++                            snackBarHost.showSnackbar(message)
++                            onControl()
++                        }
++                    }
++                ) {
++                    Text(
++                        text = stringResource(R.string.confirm),
++                    )
++                }
++            },
++            dismissButton = {
++                TextButton(onClick = { viewModel.hideInputDialog() }) {
++                    Text(
++                        text = stringResource(R.string.cancel),
++                    )
++                }
++            },
++            shape = MaterialTheme.shapes.extraLarge
++        )
++    }
++
++    Card(
++        colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerHigh),
++        elevation = getCardElevation()
++    ) {
++        Column(
++            modifier = Modifier.padding(20.dp)
++        ) {
++            Row(
++                modifier = Modifier.fillMaxWidth(),
++                horizontalArrangement = Arrangement.SpaceBetween,
++                verticalAlignment = Alignment.CenterVertically
++            ) {
++                Column(modifier = Modifier.weight(1f)) {
++                    Text(
++                        text = module.name,
++                        style = MaterialTheme.typography.titleLarge,
++                    )
++
++                    Spacer(modifier = Modifier.height(4.dp))
++
++                    Text(
++                        text = "${stringResource(R.string.kpm_version)}: ${module.version}",
++                        style = MaterialTheme.typography.bodyMedium,
++                    )
++
++                    Text(
++                        text = "${stringResource(R.string.kpm_author)}: ${module.author}",
++                        style = MaterialTheme.typography.bodyMedium,
++                    )
++
++                    Text(
++                        text = "${stringResource(R.string.kpm_args)}: ${module.args}",
++                        style = MaterialTheme.typography.bodyMedium,
++                    )
++                }
++            }
++
++            Spacer(modifier = Modifier.height(12.dp))
++
++            Text(
++                text = module.description,
++                style = MaterialTheme.typography.bodyLarge,
++            )
++
++            Spacer(modifier = Modifier.height(20.dp))
++
++            Row(
++                modifier = Modifier.fillMaxWidth(),
++                horizontalArrangement = Arrangement.spacedBy(8.dp)
++            ) {
++                Button(
++                    onClick = { viewModel.showInputDialog(module.id) },
++                    enabled = module.hasAction,
++                    modifier = Modifier.weight(1f),
++                ) {
++                    Icon(
++                        imageVector = Icons.Filled.Settings,
++                        contentDescription = null,
++                        modifier = Modifier.size(20.dp)
++                    )
++                    Spacer(modifier = Modifier.width(8.dp))
++                    Text(stringResource(R.string.kpm_control))
++                }
++
++                Button(
++                    onClick = onUninstall,
++                    modifier = Modifier.weight(1f),
++                    colors = ButtonDefaults.buttonColors(
++                        containerColor = MaterialTheme.colorScheme.error
++                    )
++                ) {
++                    Icon(
++                        imageVector = Icons.Filled.Delete,
++                        contentDescription = null,
++                        modifier = Modifier.size(20.dp)
++                    )
++                    Spacer(modifier = Modifier.width(8.dp))
++                    Text(stringResource(R.string.kpm_uninstall))
++                }
++            }
++        }
++    }
++}
++
++private fun checkStringsCommand(tempFile: File): Int {
++    val shell = getRootShell()
++    val command = "strings ${tempFile.absolutePath} | grep -E 'name=|version=|license=|author='"
++    val result = shell.newJob().add(command).to(ArrayList(), null).exec()
++
++    if (!result.isSuccess) {
++        return 0
++    }
++
++    var matchCount = 0
++    val keywords = listOf("name=", "version=", "license=", "author=")
++    var nameExists = false
++
++    for (line in result.out) {
++        if (!nameExists && line.startsWith("name=")) {
++            nameExists = true
++            matchCount++
++        } else if (nameExists) {
++            for (keyword in keywords) {
++                if (line.startsWith(keyword)) {
++                    matchCount++
++                    break
++                }
++            }
++        }
++    }
++
++    return if (nameExists) matchCount else 0
++}
++
++private fun isElfFile(tempFile: File): Boolean {
++    val elfMagic = byteArrayOf(0x7F, 'E'.code.toByte(), 'L'.code.toByte(), 'F'.code.toByte())
++    val fileBytes = ByteArray(4)
++    FileInputStream(tempFile).use { input ->
++        input.read(fileBytes)
++    }
++    return fileBytes.contentEquals(elfMagic)
++}
+\ No newline at end of file
+diff --git a/manager/app/src/main/java/com/resukisu/resukisu/ui/util/KsuCli.kt b/manager/app/src/main/java/com/resukisu/resukisu/ui/util/KsuCli.kt
+index 04df81b4..9e2d8445 100644
+--- a/manager/app/src/main/java/com/resukisu/resukisu/ui/util/KsuCli.kt
++++ b/manager/app/src/main/java/com/resukisu/resukisu/ui/util/KsuCli.kt
+@@ -571,6 +571,26 @@ fun deleteAppProfileTemplate(id: String): Boolean {
+     return shell.newJob().add("${getKsuDaemonPath()} profile delete-template '${id}'")
+         .to(ArrayList(), null).exec().isSuccess
+ }
++// KPM控制
++fun loadKpmModule(path: String, args: String? = null): String {
++    val shell = getRootShell()
++    val cmd = "${getKsuDaemonPath()} kpm load $path ${args ?: ""}"
++    return ShellUtils.fastCmd(shell, cmd)
++}
++
++fun unloadKpmModule(name: String): String {
++    val shell = getRootShell()
++    val cmd = "${getKsuDaemonPath()} kpm unload $name"
++    return ShellUtils.fastCmd(shell, cmd)
++}
++
++fun getKpmModuleCount(): Int {
++    val shell = getRootShell()
++    val cmd = "${getKsuDaemonPath()} kpm num"
++    val result = ShellUtils.fastCmd(shell, cmd)
++    return result.trim().toIntOrNull() ?: 0
++}
++
+ fun runCmd(shell: Shell, cmd: String): String {
+     return shell.newJob()
+         .add(cmd)
+@@ -579,6 +599,42 @@ fun runCmd(shell: Shell, cmd: String): String {
+         .joinToString("\n")
+ }
+ 
++fun listKpmModules(): String {
++    val shell = getRootShell()
++    val cmd = "${getKsuDaemonPath()} kpm list"
++    return try {
++        runCmd(shell, cmd).trim()
++    } catch (e: Exception) {
++        Log.e(TAG, "Failed to list KPM modules", e)
++        ""
++    }
++}
++
++fun getKpmModuleInfo(name: String): String {
++    val shell = getRootShell()
++    val cmd = "${getKsuDaemonPath()} kpm info $name"
++    return try {
++        runCmd(shell, cmd).trim()
++    } catch (e: Exception) {
++        Log.e(TAG, "Failed to get KPM module info: $name", e)
++        ""
++    }
++}
++
++fun controlKpmModule(name: String, args: String? = null): Int {
++    val shell = getRootShell()
++    val cmd = """${getKsuDaemonPath()} kpm control $name "${args ?: ""}""""
++    val result = runCmd(shell, cmd)
++    return result.trim().toIntOrNull() ?: -1
++}
++
++fun getKpmVersion(): String {
++    val shell = getRootShell()
++    val cmd = "${getKsuDaemonPath()} kpm version"
++    val result = ShellUtils.fastCmd(shell, cmd)
++    return result.trim()
++}
++
+ fun forceStopApp(packageName: String) {
+     val shell = getRootShell()
+     val result = shell.newJob().add("am force-stop $packageName").exec()
+diff --git a/manager/app/src/main/java/com/resukisu/resukisu/ui/viewmodel/KpmViewModel.kt b/manager/app/src/main/java/com/resukisu/resukisu/ui/viewmodel/KpmViewModel.kt
+new file mode 100644
+index 00000000..a0418ba6
+--- /dev/null
++++ b/manager/app/src/main/java/com/resukisu/resukisu/ui/viewmodel/KpmViewModel.kt
+@@ -0,0 +1,164 @@
++package com.resukisu.resukisu.ui.viewmodel
++
++import android.util.Log
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.setValue
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.viewModelScope
++import com.resukisu.resukisu.ui.util.controlKpmModule
++import com.resukisu.resukisu.ui.util.getKpmModuleCount
++import com.resukisu.resukisu.ui.util.getKpmModuleInfo
++import com.resukisu.resukisu.ui.util.getKpmVersion
++import com.resukisu.resukisu.ui.util.listKpmModules
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.withContext
++
++/**
++ * @author ShirkNeko
++ * @date 2025/5/31.
++ */
++class KpmViewModel : ViewModel() {
++    var moduleList by mutableStateOf(emptyList<ModuleInfo>())
++        private set
++
++    var search by mutableStateOf("")
++        internal set
++
++    var isRefreshing by mutableStateOf(false)
++        private set
++
++    var currentModuleDetail by mutableStateOf("")
++        private set
++
++    fun fetchModuleList() {
++        viewModelScope.launch(Dispatchers.IO) {
++            isRefreshing = true
++            try {
++                val moduleCount = getKpmModuleCount()
++                Log.d("KsuCli", "Module count: $moduleCount")
++
++                moduleList = getAllKpmModuleInfo()
++
++                // 获取 KPM 版本信息
++                val kpmVersion = getKpmVersion()
++                Log.d("KsuCli", "KPM Version: $kpmVersion")
++            } catch (e: Exception) {
++                Log.e("KsuCli", "获取模块列表失败", e)
++            } finally {
++                isRefreshing = false
++            }
++        }
++    }
++
++    private fun getAllKpmModuleInfo(): List<ModuleInfo> {
++        val result = mutableListOf<ModuleInfo>()
++        try {
++            val str = listKpmModules()
++            val moduleNames = str
++                .split("\n")
++                .filter { it.isNotBlank() }
++
++            for (name in moduleNames) {
++                try {
++                    val moduleInfo = parseModuleInfo(name)
++                    moduleInfo?.let { result.add(it) }
++                } catch (e: Exception) {
++                    Log.e("KsuCli", "Error processing module $name", e)
++                }
++            }
++        } catch (e: Exception) {
++            Log.e("KsuCli", "Failed to get module list", e)
++        }
++        return result
++    }
++
++    private fun parseModuleInfo(name: String): ModuleInfo? {
++        val info = getKpmModuleInfo(name)
++        if (info.isBlank()) return null
++
++        val properties = info.lineSequence()
++            .filter { line ->
++                val trimmed = line.trim()
++                trimmed.isNotEmpty() && !trimmed.startsWith("#")
++            }
++            .mapNotNull { line ->
++                line.split("=", limit = 2).let { parts ->
++                    when (parts.size) {
++                        2 -> parts[0].trim() to parts[1].trim()
++                        1 -> parts[0].trim() to ""
++                        else -> null
++                    }
++                }
++            }
++            .toMap()
++
++        return ModuleInfo(
++            id = name,
++            name = properties["name"] ?: name,
++            version = properties["version"] ?: "",
++            author = properties["author"] ?: "",
++            description = properties["description"] ?: "",
++            args = properties["args"] ?: "",
++            enabled = true,
++            hasAction = true
++        )
++    }
++
++    fun loadModuleDetail(moduleId: String) {
++        viewModelScope.launch {
++            try {
++                currentModuleDetail = withContext(Dispatchers.IO) {
++                    getKpmModuleInfo(moduleId)
++                }
++                Log.d("KsuCli", "Module detail loaded: $currentModuleDetail")
++            } catch (e: Exception) {
++                Log.e("KsuCli", "Failed to load module detail", e)
++                currentModuleDetail = "Error: ${e.message}"
++            }
++        }
++    }
++
++    var showInputDialog by mutableStateOf(false)
++        private set
++
++    var selectedModuleId by mutableStateOf<String?>(null)
++        private set
++
++    var inputArgs by mutableStateOf("")
++        private set
++
++    fun showInputDialog(moduleId: String) {
++        selectedModuleId = moduleId
++        showInputDialog = true
++    }
++
++    fun hideInputDialog() {
++        showInputDialog = false
++        selectedModuleId = null
++        inputArgs = ""
++    }
++
++    fun updateInputArgs(args: String) {
++        inputArgs = args
++    }
++
++    fun executeControl(): Int {
++        val moduleId = selectedModuleId ?: return -1
++        val result = controlKpmModule(moduleId, inputArgs)
++        hideInputDialog()
++        return result
++    }
++
++    data class ModuleInfo(
++        val id: String,
++        val name: String,
++        val version: String,
++        val author: String,
++        val description: String,
++        val args: String,
++        val enabled: Boolean,
++        val hasAction: Boolean
++    )
++}
+diff --git a/manager/app/src/main/java/com/resukisu/resukisu/ui/webui/WebViewInterface.kt b/manager/app/src/main/java/com/resukisu/resukisu/ui/webui/WebViewInterface.kt
+index 0320e3ef..47b78ffc 100644
+--- a/manager/app/src/main/java/com/resukisu/resukisu/ui/webui/WebViewInterface.kt
++++ b/manager/app/src/main/java/com/resukisu/resukisu/ui/webui/WebViewInterface.kt
+@@ -11,7 +11,9 @@ import android.widget.Toast
+ import androidx.core.content.pm.PackageInfoCompat
+ import androidx.core.view.WindowInsetsCompat
+ import androidx.core.view.WindowInsetsControllerCompat
++import com.resukisu.resukisu.ui.util.controlKpmModule
+ import com.resukisu.resukisu.ui.util.createRootShell
++import com.resukisu.resukisu.ui.util.listKpmModules
+ import com.resukisu.resukisu.ui.util.listModules
+ import com.resukisu.resukisu.ui.util.withNewRootShell
+ import com.resukisu.resukisu.ui.viewmodel.SuperUserViewModel
+@@ -265,6 +267,16 @@ class WebViewInterface(private val state: WebUIState) {
+     fun exit() {
+         state.requestExit()
+     }
++
++    @JavascriptInterface
++    fun listAllKpm(): String {
++        return listKpmModules()
++    }
++
++    @JavascriptInterface
++    fun controlKpm(name: String, args: String): Int {
++        return controlKpmModule(name, args)
++    }
+ }
+ 
+ fun hideSystemUI(window: Window) =
+diff --git a/manager/app/src/main/res/values/strings.xml b/manager/app/src/main/res/values/strings.xml
+index 06127b82..11cb2d47 100644
+--- a/manager/app/src/main/res/values/strings.xml
++++ b/manager/app/src/main/res/values/strings.xml
+@@ -270,6 +270,30 @@
+     <string name="yes">Yes</string>
+     <string name="no">No</string>
+     <string name="failed_reboot">Reboot Failed</string>
++    <string name="kpm_title">KPM</string>
++    <string name="kpm_empty">No installed KernelPatch Modules at this time</string>
++    <string name="kpm_version">Version</string>
++    <string name="kpm_author">Author</string>
++    <string name="kpm_uninstall">Uninstall</string>
++    <string name="kpm_uninstall_success">Uninstalled successfully</string>
++    <string name="kpm_uninstall_failed">Failed to uninstall</string>
++    <string name="kpm_install_success">KPM loaded successfully</string>
++    <string name="kpm_install_failed">Failed to load KPM</string>
++    <string name="kpm_args">Parameters</string>
++    <string name="kpm_control">Execute</string>
++    <string name="close_notice">Close</string>
++    <string name="kernel_module_notice">The following kernel module functions were developed by KernelPatch and modified to include the kernel module functions of SukiSU Ultra</string>
++    <string name="kpm_control_success">Success</string>
++    <string name="kpm_control_failed">Failed</string>
++    <string name="kpm_install_mode">KPM Install</string>
++    <string name="kpm_install_mode_load">Load</string>
++    <string name="kpm_install_mode_embed">Embed</string>
++    <string name="kpm_install_mode_description">Please select: %1\$s Module Installation Mode \n\nLoad: Temporarily load the module \nEmbedded: Permanently install into the system</string>
++    <string name="snackbar_failed_to_check_module_file">Unable to check if module file exists</string>
++    <string name="invalid_file_type">Incorrect file type! Please select .kpm file</string>
++    <string name="confirm_uninstall_title_with_filename">Uninstall</string>
++    <string name="confirm_uninstall_content">The following KPM will be uninstalled: %s</string>
++    <string name="search_modules">Search modules</string>
+     <string name="custom_settings">Custom settings</string>
+     <string name="theme_color">Theme Color</string>
+     <string name="horizon_flash_complete">Flash Complete</string>
+diff --git a/uapi/supercall.h b/uapi/supercall.h
+index 4eb2dfad..8dd565bc 100644
+--- a/uapi/supercall.h
++++ b/uapi/supercall.h
+@@ -172,6 +172,10 @@ struct ksu_hook_type_cmd {
+     char hook_type[32]; // Output: hook type string
+ };
+ 
++struct ksu_enable_kpm_cmd {
++    __u8 enabled; // Output: true if KPM is enabled
++};
++
+ DEFINE_KSU_UAPI_CONST(__u8, DYNAMIC_MANAGER_OP_SET, 0)
+ DEFINE_KSU_UAPI_CONST(__u8, DYNAMIC_MANAGER_OP_GET, 1)
+ DEFINE_KSU_UAPI_CONST(__u8, DYNAMIC_MANAGER_OP_WIPE, 2)
+@@ -194,6 +198,21 @@ struct ksu_get_managers_cmd {
+     struct ksu_manager_entry managers[]; // Output: Array of active manager
+ } __attribute__((packed));
+ 
++DEFINE_KSU_UAPI_CONST(__u8, SUKISU_KPM_LOAD, 1)
++DEFINE_KSU_UAPI_CONST(__u8, SUKISU_KPM_UNLOAD, 2)
++DEFINE_KSU_UAPI_CONST(__u8, SUKISU_KPM_NUM, 3)
++DEFINE_KSU_UAPI_CONST(__u8, SUKISU_KPM_LIST, 4)
++DEFINE_KSU_UAPI_CONST(__u8, SUKISU_KPM_INFO, 5)
++DEFINE_KSU_UAPI_CONST(__u8, SUKISU_KPM_CONTROL, 6)
++DEFINE_KSU_UAPI_CONST(__u8, SUKISU_KPM_VERSION, 7)
++
++struct ksu_kpm_cmd {
++    __u8 control_code;
++    __aligned_u64 __user arg1;
++    __aligned_u64 __user arg2;
++    __aligned_u64 __user result_code;
++} __attribute__((packed));
++
+ DEFINE_KSU_UAPI_CONST(__u8, KERNEL_PATCH_NOT_FOUND, 0)
+ DEFINE_KSU_UAPI_CONST(__u8, KERNEL_PATCH_ORIGINAL, 1)
+ DEFINE_KSU_UAPI_CONST(__u8, KERNEL_PATCH_KPN, 2)
+@@ -235,11 +254,12 @@ DEFINE_KSU_UAPI_CONST(__u32, KSU_IOCTL_DISABLE_ESCAPE_TO_ROOT, _IO('K', 21))
+ // Downstream add IOCTL command definitions
+ DEFINE_KSU_UAPI_CONST(__u32, KSU_IOCTL_GET_FULL_VERSION, _IOC(_IOC_READ, 'K', 100, 0))
+ DEFINE_KSU_UAPI_CONST(__u32, KSU_IOCTL_HOOK_TYPE, _IOC(_IOC_READ, 'K', 101, 0))
+-// 102 = ENABLE_KPM (KernelPatch Module),deprecated
++DEFINE_KSU_UAPI_CONST(__u32, KSU_IOCTL_ENABLE_KPM, _IOC(_IOC_READ, 'K', 102, 0))
+ DEFINE_KSU_UAPI_CONST(__u32, KSU_IOCTL_DYNAMIC_MANAGER, _IOC(_IOC_READ | _IOC_WRITE, 'K', 103, 0))
+ // 104 = old get_managers, deprecated
+ DEFINE_KSU_UAPI_CONST(__u32, KSU_IOCTL_GET_MANAGERS, _IOC(_IOC_READ | _IOC_WRITE, 'K', 105, 0))
+ DEFINE_KSU_UAPI_CONST(__u32, KSU_IOCTL_GET_KERNEL_PATCH_IMPLEMENT, _IOC(_IOC_READ, 'K', 106, 0))
+-// 200 = MANAGE_KPM,deprecated
++DEFINE_KSU_UAPI_CONST(__u32, KSU_IOCTL_KPM, _IOC(_IOC_READ | _IOC_WRITE, 'K', 200, 0))
++
+ #undef DEFINE_KSU_UAPI_CONST
+ #endif
+diff --git a/userspace/ksud/src/android/cli.rs b/userspace/ksud/src/android/cli.rs
+index aca79404..ac0d6ad3 100755
+--- a/userspace/ksud/src/android/cli.rs
++++ b/userspace/ksud/src/android/cli.rs
+@@ -143,6 +143,13 @@ enum Commands {
+         command: BootInfo,
+     },
+ 
++    /// KPM module manager
++    #[cfg(all(target_arch = "aarch64", target_os = "android"))]
++    Kpm {
++        #[command(subcommand)]
++        command: kpm_cmd::Kpm,
++    },
++
+     /// For developers
+     Debug {
+         #[command(subcommand)]
+@@ -552,6 +559,31 @@ enum UmountOp {
+     List,
+ }
+ 
++#[cfg(all(target_arch = "aarch64", target_os = "android"))]
++mod kpm_cmd {
++    use std::path::PathBuf;
++
++    use clap::Subcommand;
++
++    #[derive(Subcommand, Debug)]
++    pub enum Kpm {
++        /// Load a KPM module: load <path> [args]
++        Load { path: PathBuf, args: Option<String> },
++        /// Unload a KPM module: unload <name>
++        Unload { name: String },
++        /// Get number of loaded modules
++        Num,
++        /// List loaded KPM modules
++        List,
++        /// Get info of a KPM module: info <name>
++        Info { name: String },
++        /// Send control command to a KPM module: control <name> <args>
++        Control { name: String, args: String },
++        /// Print KPM Loader version
++        Version,
++    }
++}
++
+ #[derive(clap::Subcommand, Debug)]
+ enum Initrc {
+     /// Regenerate preinit rc file
+@@ -904,6 +936,27 @@ pub fn run() -> Result<()> {
+                 Ok(())
+             }
+         },
++        #[cfg(all(target_arch = "aarch64", target_os = "android"))]
++        Commands::Kpm { command } => {
++            use kpm_cmd::Kpm;
++
++            use crate::android::kpm;
++            match command {
++                Kpm::Load { path, args } => {
++                    kpm::load_module(path.to_str().unwrap(), args.as_deref())
++                }
++                Kpm::Unload { name } => kpm::unload_module(name),
++                Kpm::Num => kpm::num().map(|_| ()),
++                Kpm::List => kpm::list(),
++                Kpm::Info { name } => kpm::info(name),
++                Kpm::Control { name, args } => {
++                    let ret = kpm::control(name, args)?;
++                    println!("{ret}");
++                    Ok(())
++                }
++                Kpm::Version => kpm::version(),
++            }
++        }
+         Commands::Initrc { command } => match command {
+             Initrc::Refresh => regenerate_preinit_rc(),
+         },
+diff --git a/userspace/ksud/src/android/init_event.rs b/userspace/ksud/src/android/init_event.rs
+index 852e9714..f9cb044d 100644
+--- a/userspace/ksud/src/android/init_event.rs
++++ b/userspace/ksud/src/android/init_event.rs
+@@ -6,6 +6,9 @@ use log::{error, info, warn};
+ use prop_rs_android::{resetprop::ResetProp, sys_prop};
+ use rustix::process::chdir;
+ 
++#[cfg(all(target_arch = "aarch64", target_os = "android"))]
++use crate::android::kpm;
++
+ use crate::{
+     android::{
+         dynamic_manager, ksucalls,
+@@ -108,6 +111,11 @@ pub fn on_post_data_fs() -> Result<()> {
+ 
+     // Load susfs config entries that must capture metadata before mounts/overlays.
+     crate::android::susfs::init_event::on_post_fs_data();
++    #[cfg(all(target_arch = "aarch64", target_os = "android"))]
++    if let Err(e) = kpm::booted_load() {
++        warn!("KPM: failed to load boot modules: {e}");
++    }
++
+ 
+     // execute metamodule post-fs-data script first (priority)
+     if let Err(e) = metamodule::exec_stage_script("post-fs-data", true) {
+diff --git a/userspace/ksud/src/android/kpm.rs b/userspace/ksud/src/android/kpm.rs
+new file mode 100644
+index 00000000..5dfd0537
+--- /dev/null
++++ b/userspace/ksud/src/android/kpm.rs
+@@ -0,0 +1,273 @@
++use std::{
++    ffi::{CStr, CString, OsStr},
++    fs, io,
++    os::unix::fs::PermissionsExt,
++    path::Path,
++};
++
++use anyhow::{Result, bail};
++
++use crate::android::{ksucalls::ksuctl, uapi};
++
++const KPM_DIR: &str = "/data/adb/kpm";
++
++pub fn load_module<P>(path: P, args: Option<&str>) -> Result<()>
++where
++    P: AsRef<Path>,
++{
++    let path = CString::new(path.as_ref().to_string_lossy().to_string())?;
++    let args = args.map_or_else(|| CString::new(String::new()), CString::new)?;
++
++    let mut ret = -1;
++    let mut cmd = uapi::ksu_kpm_cmd {
++        control_code: uapi::SUKISU_KPM_LOAD_RUST,
++        arg1: path.as_ptr() as u64,
++        arg2: args.as_ptr() as u64,
++        result_code: &raw mut ret as u64,
++    };
++
++    ksuctl(uapi::KSU_IOCTL_KPM_RUST, &raw mut cmd)?;
++
++    if ret < 0 {
++        println!("Failed to load kpm: {}", io::Error::from_raw_os_error(ret));
++    }
++    Ok(())
++}
++
++pub fn list() -> Result<()> {
++    let mut buf = vec![0u8; 1024];
++
++    let mut ret = -1;
++    let mut cmd = uapi::ksu_kpm_cmd {
++        control_code: uapi::SUKISU_KPM_LIST_RUST,
++        arg1: buf.as_mut_ptr() as u64,
++        arg2: buf.len() as u64,
++        result_code: &raw mut ret as u64,
++    };
++
++    ksuctl(uapi::KSU_IOCTL_KPM_RUST, &raw mut cmd)?;
++
++    if ret < 0 {
++        println!(
++            "Failed to get kpm list: {}",
++            io::Error::from_raw_os_error(ret)
++        );
++        return Ok(());
++    }
++
++    println!("{}", buf2str(&buf));
++
++    Ok(())
++}
++
++pub fn unload_module(name: String) -> Result<()> {
++    let name = CString::new(name)?;
++
++    let mut ret = -1;
++    let mut cmd = uapi::ksu_kpm_cmd {
++        control_code: uapi::SUKISU_KPM_UNLOAD_RUST,
++        arg1: name.as_ptr() as u64,
++        arg2: 0,
++        result_code: &raw mut ret as u64,
++    };
++
++    ksuctl(uapi::KSU_IOCTL_KPM_RUST, &raw mut cmd)?;
++
++    if ret < 0 {
++        println!(
++            "Failed to unload kpm: {}",
++            io::Error::from_raw_os_error(ret)
++        );
++    }
++    Ok(())
++}
++
++pub fn info(name: String) -> Result<()> {
++    let name = CString::new(name)?;
++    let mut buf = vec![0u8; 256];
++
++    let mut ret = -1;
++    let mut cmd = uapi::ksu_kpm_cmd {
++        control_code: uapi::SUKISU_KPM_INFO_RUST,
++        arg1: name.as_ptr() as u64,
++        arg2: buf.as_mut_ptr() as u64,
++        result_code: &raw mut ret as u64,
++    };
++
++    ksuctl(uapi::KSU_IOCTL_KPM_RUST, &raw mut cmd)?;
++
++    if ret < 0 {
++        println!(
++            "Failed to get kpm info: {}",
++            io::Error::from_raw_os_error(ret)
++        );
++        return Ok(());
++    }
++    println!("{}", buf2str(&buf));
++    Ok(())
++}
++
++pub fn control(name: String, args: String) -> Result<i32> {
++    let name = CString::new(name)?;
++    let args = CString::new(args)?;
++
++    let mut ret = -1;
++    let mut cmd = uapi::ksu_kpm_cmd {
++        control_code: uapi::SUKISU_KPM_CONTROL_RUST,
++        arg1: name.as_ptr() as u64,
++        arg2: args.as_ptr() as u64,
++        result_code: &raw mut ret as u64,
++    };
++
++    ksuctl(uapi::KSU_IOCTL_KPM_RUST, &raw mut cmd)?;
++
++    if ret < 0 {
++        println!(
++            "Failed to control kpm: {}",
++            io::Error::from_raw_os_error(ret)
++        );
++    }
++
++    Ok(ret)
++}
++
++pub fn num() -> Result<i32> {
++    let mut ret = -1;
++    let mut cmd = uapi::ksu_kpm_cmd {
++        control_code: uapi::SUKISU_KPM_NUM_RUST,
++        arg1: 0,
++        arg2: 0,
++        result_code: &raw mut ret as u64,
++    };
++
++    ksuctl(uapi::KSU_IOCTL_KPM_RUST, &raw mut cmd)?;
++
++    if ret < 0 {
++        println!(
++            "Failed to get kpm num: {}",
++            io::Error::from_raw_os_error(ret)
++        );
++        return Ok(ret);
++    }
++    println!("{ret}");
++    Ok(ret)
++}
++
++pub fn version() -> Result<()> {
++    let mut buf = vec![0u8; 1024];
++
++    let mut ret = -1;
++    let mut cmd = uapi::ksu_kpm_cmd {
++        control_code: uapi::SUKISU_KPM_VERSION_RUST,
++        arg1: buf.as_mut_ptr() as u64,
++        arg2: buf.len() as u64,
++        result_code: &raw mut ret as u64,
++    };
++
++    ksuctl(uapi::KSU_IOCTL_KPM_RUST, &raw mut cmd)?;
++
++    if ret < 0 {
++        println!(
++            "Failed to get kpm version: {}",
++            io::Error::from_raw_os_error(ret)
++        );
++        return Ok(());
++    }
++
++    let binding = buf2str(&buf);
++    let ver = binding.trim();
++
++    print!("{ver}");
++    Ok(())
++}
++
++pub fn check_version() -> Result<String> {
++    let mut buf = vec![0u8; 1024];
++
++    let mut ret = -1;
++    let mut cmd = uapi::ksu_kpm_cmd {
++        control_code: uapi::SUKISU_KPM_VERSION_RUST,
++        arg1: buf.as_mut_ptr() as u64,
++        arg2: buf.len() as u64,
++        result_code: &raw mut ret as u64,
++    };
++
++    ksuctl(uapi::KSU_IOCTL_KPM_RUST, &raw mut cmd)?;
++
++    if ret < 0 {
++        println!(
++            "Failed to get kpm version: {}",
++            io::Error::from_raw_os_error(ret)
++        );
++        return Ok(String::new());
++    }
++
++    let binding = buf2str(&buf);
++    let ver = binding.trim();
++
++    if ver.is_empty() {
++        bail!("KPM: invalid version response: {ver}");
++    }
++    log::info!("KPM: version check ok: {ver}");
++    Ok(ver.to_string())
++}
++
++fn ensure_dir() -> Result<()> {
++    let dir = Path::new(KPM_DIR);
++
++    if !dir.exists() {
++        let _ = fs::create_dir_all(KPM_DIR);
++    }
++
++    if dir.metadata()?.permissions().mode() != 0o777 {
++        fs::set_permissions(KPM_DIR, fs::Permissions::from_mode(0o777))?;
++    }
++
++    Ok(())
++}
++
++pub fn booted_load() -> Result<()> {
++    check_version()?;
++    ensure_dir()?;
++
++    if crate::android::utils::is_safe_mode() {
++        log::warn!("KPM: safe-mode – all modules won't load");
++        return Ok(());
++    }
++
++    load_all_modules()?;
++
++    Ok(())
++}
++
++fn load_all_modules() -> Result<()> {
++    let dir = Path::new(KPM_DIR);
++
++    if !dir.is_dir() {
++        return Ok(());
++    }
++
++    for entry in dir.read_dir()? {
++        let p = entry?.path();
++
++        if let Some(ex) = p.extension()
++            && ex == OsStr::new("kpm")
++        {
++            load_module(p, None)?;
++        }
++    }
++    Ok(())
++}
++
++/// Convert zero-padded kernel buffer to owned String.
++/// DON'T REMOVE!!! we must use this method, because kernel use \0 to end of buffer
++/// if directly to_string_lossy, we will get a lot of uninit data
++/// refer: res = copy_to_user(arg1, &buffer, len + 1);
++fn buf2str(buf: &[u8]) -> String {
++    // SAFETY: buffer is always NUL-terminated by kernel.
++    unsafe {
++        CStr::from_ptr(buf.as_ptr().cast())
++            .to_string_lossy()
++            .into_owned()
++    }
++}
+diff --git a/userspace/ksud/src/android/mod.rs b/userspace/ksud/src/android/mod.rs
+index ab97afb3..87eacda8 100644
+--- a/userspace/ksud/src/android/mod.rs
++++ b/userspace/ksud/src/android/mod.rs
+@@ -3,6 +3,8 @@ mod debug;
+ mod dynamic_manager;
+ mod feature;
+ mod init_event;
++#[cfg(all(target_arch = "aarch64", target_os = "android"))]
++mod kpm;
+ mod ksucalls;
+ mod late_load;
+ mod module;

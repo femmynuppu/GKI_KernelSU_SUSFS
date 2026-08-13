@@ -117,7 +117,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: 验证 KPM 构建范围
-        run: bash build-helpers/validate-kpm-recipe.sh "${{ inputs.use_kpm }}" "${{ inputs.android_version }}" "${{ inputs.kernel_version }}" "${{ inputs.sub_level }}" "${{ inputs.add_nomount }}" "${{ inputs.add_zeromount }}"
+        run: bash build-helpers/validate-kpm-recipe.sh "${{ inputs.use_kpm }}" "${{ inputs.android_version }}" "${{ inputs.kernel_version }}" "${{ inputs.sub_level }}" "${{ inputs.add_nomount }}" "${{ inputs.add_zeromount }}" "${{ inputs.version }}" "${{ inputs.build_time }}"
 
       # ==================== 构建信息摘要 ====================
       # 打印当前构建的所有配置信息，方便调试和追踪
@@ -208,7 +208,7 @@ jobs:
       - name: 安装编译依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y ccache python3 git curl build-essential libssl-dev bison flex libelf-dev dwarves
+          sudo apt-get install -y ccache python3 git curl jq build-essential libssl-dev bison flex libelf-dev dwarves
 
       # ==================== 配置 ccache ====================
       # ccache 用于缓存编译结果，加速后续构建
@@ -301,7 +301,9 @@ jobs:
           fi
 
           SUSFS_LATEST_COMMIT_DATE=$(git -C susfs4ksu log -1 --date=format:'%Y-%m-%d %H:%M:%S %z' --format='%cd')
+          SUSFS_RESOLVED_COMMIT=$(git -C susfs4ksu rev-parse HEAD)
           echo "SUSFS_LATEST_COMMIT_DATE=$SUSFS_LATEST_COMMIT_DATE" >> $GITHUB_ENV
+          echo "SUSFS_RESOLVED_COMMIT=$SUSFS_RESOLVED_COMMIT" >> "$GITHUB_ENV"
           echo "SUSFS 仓库最新提交日期: $SUSFS_LATEST_COMMIT_DATE"
 
           echo "准备补丁资源..."
@@ -456,7 +458,13 @@ jobs:
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           echo "添加 ReSukiSU..."
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash $BRANCH
+          source "${{ github.workspace }}/config/kpm.config"
+          if [ "${{ inputs.use_kpm }}" = "true" ]; then
+            curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/$RESUKISU_CURRENT/kernel/setup.sh" | bash -s "$RESUKISU_CURRENT"
+            bash "${{ github.workspace }}/build-helpers/apply-resukisu-kpm.sh" "$KERNEL_ROOT/KernelSU"
+          else
+            curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash $BRANCH
+          fi
 
           if [ -d "KernelSU/.git" ]; then
             KSU_LATEST_COMMIT_DATE=$(git -C KernelSU log -1 --date=format:'%Y-%m-%d %H:%M:%S %z' --format='%cd')
@@ -1439,7 +1447,7 @@ jobs:
           EOF
 
           if [ "${{ inputs.ksu_variant }}" == "SukiSU" ] || [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ] || [ "${{ inputs.ksu_variant }}" == "Next" ]; then
-            if [[ "${{ inputs.use_kpm }}" == enabled* ]] || [[ "${{ inputs.use_kpm }}" == patched* ]]; then
+            if [ "${{ inputs.use_kpm }}" = "true" ]; then
               if ! grep -RqsE '^[[:space:]]*config[[:space:]]+KPM([[:space:]]|$)' common KernelSU 2>/dev/null; then
                 echo "错误: 已请求启用 KPM，但当前 KernelSU 代码未声明 CONFIG_KPM" >&2
                 exit 1
@@ -1656,6 +1664,9 @@ jobs:
             fi
             common/scripts/extract-ikconfig "$FINAL_IMAGE" > /tmp/final-kernel.config
             bash "$GITHUB_WORKSPACE/build-helpers/verify-bbr-config.sh" /tmp/final-kernel.config
+            if [ "${{ inputs.use_kpm }}" = "true" ]; then
+              bash "$GITHUB_WORKSPACE/build-helpers/verify-kpm-config.sh" /tmp/final-kernel.config
+            fi
 
             echo "一般情况下不会出错，除非KSU仓库和SUSFS仓库代码不同。"
             echo "不要问，不要急，这跟你怎么努力，或者跟我反馈没关系，因为这跟我无关。"
@@ -1678,17 +1689,109 @@ jobs:
 
           cp "$SRC_DIR/Image" ./bootimgs/
           cp "$SRC_DIR/Image.lz4" ./bootimgs/
-          cp "$SRC_DIR/Image" ./
-          cp "$SRC_DIR/Image.lz4" ./
-          gzip -n -k -f -9 ./Image > ./Image.gz
+          if [ "${{ inputs.use_kpm }}" = "true" ]; then
+            mkdir -p artifacts/unpatched artifacts/kpm artifacts/kernelpatch-tools
+            cp "$SRC_DIR/Image" artifacts/unpatched/Image
+          else
+            cp "$SRC_DIR/Image" ./
+            cp "$SRC_DIR/Image.lz4" ./
+            gzip -n -k -f -9 ./Image > ./Image.gz
+          fi
 
       # ==================== 创建 AnyKernel3 压缩包 ====================
       - name: 创建 AnyKernel3 压缩包
+        if: ${{ !inputs.use_kpm }}
         run: |
           cd $ANYKERNEL3
           ZIP_NAME="${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-AnyKernel3.zip"
           mv ../Image ./Image
           zip -r "../$ZIP_NAME" ./*
+
+      - name: 构建并验证 KPM 恢复产物
+        if: ${{ inputs.use_kpm }}
+        env:
+          CONFIGURED_KPM_SUPERKEY: ${{ secrets.KPM_SUPERKEY }}
+          KPM_INPUTS_JSON: ${{ toJSON(inputs) }}
+        run: |
+          set -euo pipefail
+          source "$GITHUB_WORKSPACE/config/kpm.config"
+
+          TOOLCHAIN_NAME=arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf
+          TOOLCHAIN_ROOT="$RUNNER_TEMP/$TOOLCHAIN_NAME"
+          if [ ! -x "$TOOLCHAIN_ROOT/bin/aarch64-none-elf-gcc" ]; then
+            curl -fL \
+              -o "$RUNNER_TEMP/$TOOLCHAIN_NAME.tar.xz" \
+              "https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/12.2.rel1/binrel/$TOOLCHAIN_NAME.tar.xz"
+            tar -Jxf "$RUNNER_TEMP/$TOOLCHAIN_NAME.tar.xz" -C "$RUNNER_TEMP"
+          fi
+          export TARGET_COMPILE="$TOOLCHAIN_ROOT/bin/aarch64-none-elf-"
+
+          if [ -n "$CONFIGURED_KPM_SUPERKEY" ]; then
+            export KPM_SUPERKEY="$CONFIGURED_KPM_SUPERKEY"
+          else
+            export KPM_SUPERKEY
+            KPM_SUPERKEY=$(openssl rand -hex 32)
+            echo "::notice::No KPM_SUPERKEY secret configured; generated an ephemeral KernelPatch superkey"
+          fi
+
+          UNPATCHED="$GITHUB_WORKSPACE/artifacts/unpatched/Image"
+          PATCHED="$GITHUB_WORKSPACE/artifacts/kpm/Image"
+          KP_WORK="$RUNNER_TEMP/kpm-build"
+          export KPM_UNPATCHED_SHA256
+          KPM_UNPATCHED_SHA256=$(sha256sum "$UNPATCHED" | cut -d' ' -f1)
+          bash "$GITHUB_WORKSPACE/build-helpers/build-kernelpatch.sh" \
+            "$UNPATCHED" "$PATCHED" "$KP_WORK"
+
+          KPIMG="$KP_WORK/KernelPatch/kernel/kpimg"
+          KPTOOLS="$KP_WORK/KernelPatch/tools/build/kptools"
+          cp "$KPIMG" "$GITHUB_WORKSPACE/artifacts/kernelpatch-tools/kpimg"
+          cp "$KPTOOLS" "$GITHUB_WORKSPACE/artifacts/kernelpatch-tools/kptools"
+          (
+            cd "$GITHUB_WORKSPACE/artifacts/kernelpatch-tools"
+            sha256sum kpimg kptools > SHA256SUMS
+          )
+
+          export EXPECTED_KERNEL_RELEASE="${{ inputs.version }}"
+          export EXPECTED_BUILD_TIMESTAMP="$KBUILD_BUILD_TIMESTAMP"
+          bash "$GITHUB_WORKSPACE/build-helpers/verify-kpm-artifacts.sh" \
+            "$UNPATCHED" "$PATCHED" "$KPIMG" "$KPTOOLS"
+
+          package_anykernel() {
+            local image=$1
+            local output=$2
+            local package_dir
+            package_dir=$(mktemp -d)
+            cp -a "$ANYKERNEL3/." "$package_dir/"
+            rm -f "$package_dir/Image"
+            cp "$image" "$package_dir/Image"
+            (
+              cd "$package_dir"
+              zip -r "$GITHUB_WORKSPACE/$output" ./*
+            )
+            rm -rf "$package_dir"
+          }
+          package_anykernel \
+            "$UNPATCHED" \
+            "ReSukiSU-5.10.236-unpatched.zip"
+          package_anykernel \
+            "$PATCHED" \
+            "ReSukiSU-5.10.236-KernelPatch-0.13.3-KPM.zip"
+
+          WORKFLOW_COMMIT="$GITHUB_SHA" \
+          KERNEL_SOURCE_COMMIT="$(git -C "$KERNEL_ROOT/common" rev-parse HEAD)" \
+          RESUKISU_COMMIT="$RESUKISU_CURRENT" \
+          RESUKISU_KPM_DONOR="$RESUKISU_KPM_DONOR" \
+          SUSFS_COMMIT="$SUSFS_RESOLVED_COMMIT" \
+          KERNELPATCH_COMMIT="$KERNELPATCH_COMMIT" \
+          KERNELPATCH_VERSION="$KERNELPATCH_VERSION" \
+          MANAGER_SOURCE_COMMIT="$RESUKISU_CURRENT" \
+          KPM_KPIMG_PATH="$KPIMG" \
+          KPM_KPTOOLS_PATH="$KPTOOLS" \
+          KPM_UNPATCHED_IMAGE="$UNPATCHED" \
+          KPM_PATCHED_IMAGE="$PATCHED" \
+          KPM_INPUTS_JSON="$KPM_INPUTS_JSON" \
+            bash "$GITHUB_WORKSPACE/build-helpers/write-kpm-provenance.sh" \
+              "$GITHUB_WORKSPACE/artifacts/build-provenance.json"
 
       # ==================== 构建 Boot 镜像 (Android 12) ====================
       # Android 12 需要从 GKI 认证镜像中提取 ramdisk
@@ -1779,12 +1882,24 @@ jobs:
 
       # ==================== 上传构建产物 ====================
       - name: 上传构建产物
+        if: ${{ !inputs.use_kpm }}
         uses: actions/upload-artifact@v6
         with:
           name: ReSukiSU_kernel-${{ env.CONFIG }}
           path: |
             *AnyKernel3.zip
 #            *.img
+          compression-level: 9
+
+      - name: 上传 KPM 恢复与实验产物
+        if: ${{ inputs.use_kpm }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ReSukiSU-KernelPatch-KPM-${{ env.CONFIG }}
+          path: |
+            ReSukiSU-*.zip
+            artifacts/
+          if-no-files-found: error
           compression-level: 9
 
       # ==================== 上传补丁冲突文件 ====================
