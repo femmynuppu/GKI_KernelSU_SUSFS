@@ -75,9 +75,15 @@ KPTOOLS="$KP_DIR/tools/build/kptools"
 input_sha256=$(sha256sum "$INPUT" | cut -d' ' -f1)
 mkdir -p "$(dirname "$OUTPUT")"
 cp "$INPUT" "$OUTPUT"
-"$KPTOOLS" -p -i "$OUTPUT" -k "$KPIMG" -s "${KPM_SUPERKEY:?KPM_SUPERKEY is required}" -o "$OUTPUT.patched"
+if ! "$KPTOOLS" -p -i "$OUTPUT" -k "$KPIMG" -s "${KPM_SUPERKEY:?KPM_SUPERKEY is required}" -o "$OUTPUT.patched" >/dev/null 2>&1; then
+  echo "KernelPatch image patching failed" >&2
+  exit 1
+fi
 mv "$OUTPUT.patched" "$OUTPUT"
-"$KPTOOLS" -l -i "$OUTPUT" >/dev/null
+if ! "$KPTOOLS" -l -i "$OUTPUT" >/dev/null 2>&1; then
+  echo "KernelPatch image inspection failed" >&2
+  exit 1
+fi
 post_patch_input_sha256=$(sha256sum "$INPUT" | cut -d' ' -f1)
 [ "$post_patch_input_sha256" = "$input_sha256" ] || {
   echo "unpatched input image changed during KernelPatch build" >&2

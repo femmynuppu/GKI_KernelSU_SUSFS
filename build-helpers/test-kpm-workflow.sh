@@ -96,10 +96,14 @@ set -e
   echo "KernelPatch helper modified its nested input" >&2
   exit 1
 }
-grep -Fq '"$KPTOOLS" -l -i "$OUTPUT" >/dev/null' "$KP_HELPER" || {
-  echo "KernelPatch helper must suppress superkeys from inspection output" >&2
-  exit 1
-}
+for secret_safe_call in \
+  '"$KPTOOLS" -p -i "$OUTPUT" -k "$KPIMG" -s "${KPM_SUPERKEY:?KPM_SUPERKEY is required}" -o "$OUTPUT.patched" >/dev/null 2>&1' \
+  '"$KPTOOLS" -l -i "$OUTPUT" >/dev/null 2>&1'; do
+  grep -Fq "$secret_safe_call" "$KP_HELPER" || {
+    echo "KernelPatch helper must suppress superkeys from every kptools call" >&2
+    exit 1
+  }
+done
 for required in "$HELPER" "$PATCH"; do
   [ -f "$required" ] || {
     echo "missing required KPM source port file: $required" >&2
