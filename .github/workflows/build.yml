@@ -1515,6 +1515,7 @@ jobs:
 
           # 配置内核名称
           if [ -n "${{ inputs.version }}" ]; then
+            bash "$GITHUB_WORKSPACE/build-helpers/spoof-kernel-version.sh" "$KERNEL_ROOT/common" "${{ inputs.version }}"
             CLEAN_VERSION=$(echo "${{ inputs.version }}" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+//')
             
             # 定义 KMI_TAG（与自动版本保持一致）
