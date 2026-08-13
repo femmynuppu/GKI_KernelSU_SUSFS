@@ -2092,7 +2092,7 @@ diff --git a/manager/app/src/main/res/values/strings.xml b/manager/app/src/main/
 index 06127b82..11cb2d47 100644
 --- a/manager/app/src/main/res/values/strings.xml
 +++ b/manager/app/src/main/res/values/strings.xml
-@@ -270,6 +270,30 @@
+@@ -270,6 +270,29 @@
      <string name="yes">Yes</string>
      <string name="no">No</string>
      <string name="failed_reboot">Reboot Failed</string>
@@ -2119,7 +2119,6 @@ index 06127b82..11cb2d47 100644
 +    <string name="invalid_file_type">Incorrect file type! Please select .kpm file</string>
 +    <string name="confirm_uninstall_title_with_filename">Uninstall</string>
 +    <string name="confirm_uninstall_content">The following KPM will be uninstalled: %s</string>
-+    <string name="search_modules">Search modules</string>
      <string name="custom_settings">Custom settings</string>
      <string name="theme_color">Theme Color</string>
      <string name="horizon_flash_complete">Flash Complete</string>
