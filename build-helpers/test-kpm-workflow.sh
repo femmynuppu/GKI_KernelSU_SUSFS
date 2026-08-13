@@ -164,8 +164,7 @@ for resource in \
   snackbar_failed_to_check_module_file \
   invalid_file_type \
   confirm_uninstall_title_with_filename \
-  confirm_uninstall_content \
-  search_modules; do
+  confirm_uninstall_content; do
   entry="<string name=\"$resource\""
   grep -Fq "$entry" "$PATCH" || {
     echo "KPM source port patch is missing Manager resource: $resource" >&2
@@ -176,6 +175,14 @@ for resource in \
     exit 1
   }
 done
+if grep -Fq '<string name="search_modules">' "$PATCH"; then
+  echo "KPM source port patch must reuse the pinned Manager search_modules resource" >&2
+  exit 1
+fi
+grep -Fq '  search_modules; do' "$HELPER" || {
+  echo "KPM source port helper must verify the pinned Manager search_modules resource" >&2
+  exit 1
+}
 
 if grep -Eq '^(GIT binary patch|Binary files .*manager/app/src/main/assets/(kpimg|kptools))' "$PATCH"; then
   echo "KPM source port patch must not contain binary assets" >&2
