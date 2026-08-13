@@ -1,6 +1,6 @@
 # 本文件用于配置 SUSFS 和 SukiSU 仓库的自定义提交
 # ==================== SUSFS 各分支的 commit hash ====================
-gki-android12-5.10=4003ecf2d01c6d13fa8edf6c4f2607365738dc3d
+gki-android12-5.10=3c14ad549f826b1f53878ec8c12253efebeed75a
 gki-android13-5.10=
 gki-android13-5.15=
 gki-android14-5.15=
