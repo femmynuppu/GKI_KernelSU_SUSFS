@@ -27,11 +27,11 @@ echo "  + Kconfig, Makefile"
 # --- 3. fs/d_path.c (d_path) ----------------------------------------------
 if ! grep -q 'nomount_handle_dpath' fs/d_path.c; then
   perl -0777 -pi -e 's/(\nchar \*d_path\(const struct path \*path, char \*buf, int buflen\)\n)/\n#ifdef CONFIG_NOMOUNT\nextern char *nomount_handle_dpath(const struct path *path, char *buf, int buflen);\n#endif\n$1/' fs/d_path.c
-  # Keep the declaration at function start, then call the hook after all existing
-  # declarations. Linux 5.x ends with int error; 6.x has struct path root.
-  perl -0777 -pi -e 's/(char \*d_path\(const struct path \*path, char \*buf, int buflen\)\n\{\n)(.*?\n\tint error;\n)/$1#ifdef CONFIG_NOMOUNT\n\tchar *nm_path;\n#endif\n$2#ifdef CONFIG_NOMOUNT\n\tnm_path = nomount_handle_dpath(path, buf, buflen);\n\tif (unlikely(nm_path)) {\n\t\treturn nm_path;\n\t}\n#endif\n/s' fs/d_path.c
-  if ! grep -q 'nm_path = nomount_handle_dpath' fs/d_path.c; then
-    perl -0777 -pi -e 's/(char \*d_path\(const struct path \*path, char \*buf, int buflen\)\n\{\n)(.*?\n\tstruct path root;\n)/$1#ifdef CONFIG_NOMOUNT\n\tchar *nm_path;\n#endif\n$2#ifdef CONFIG_NOMOUNT\n\tnm_path = nomount_handle_dpath(path, buf, buflen);\n\tif (unlikely(nm_path)) {\n\t\treturn nm_path;\n\t}\n#endif\n/s' fs/d_path.c
+  # 6.6+ uses DECLARE_BUFFER; 5.x uses struct path root / int error.
+  if grep -q 'DECLARE_BUFFER' fs/d_path.c; then
+    perl -0777 -pi -e 's/(char \*d_path\(const struct path \*path, char \*buf, int buflen\)\n\{\n)(\tDECLARE_BUFFER\([^;]+;\n)/$1#ifdef CONFIG_NOMOUNT\n\tchar *nm_path;\n#endif\n$2#ifdef CONFIG_NOMOUNT\n\tnm_path = nomount_handle_dpath(path, buf, buflen);\n\tif (unlikely(nm_path)) {\n\t\treturn nm_path;\n\t}\n#endif\n/s' fs/d_path.c
+  else
+    perl -0777 -pi -e 's/(char \*d_path\(const struct path \*path, char \*buf, int buflen\)\n\{\n)(.*?\n\tint error;\n)/$1#ifdef CONFIG_NOMOUNT\n\tchar *nm_path;\n#endif\n$2#ifdef CONFIG_NOMOUNT\n\tnm_path = nomount_handle_dpath(path, buf, buflen);\n\tif (unlikely(nm_path)) {\n\t\treturn nm_path;\n\t}\n#endif\n/s' fs/d_path.c
   fi
   echo "  + d_path.c"
 fi
