@@ -1,19 +1,16 @@
 --- a/kernel/locking/rtmutex.c
 +++ b/kernel/locking/rtmutex.c
-@@ -1071,6 +1071,7 @@ static void remove_waiter(struct rt_mutex *lock,
- {
- 	bool is_top_waiter = (waiter == rt_mutex_top_waiter(lock));
- 	struct task_struct *owner = rt_mutex_owner(lock);
-+	struct task_struct *waiter_task = waiter->task;
+@@ -1071,9 +1071,9 @@ static void remove_waiter(struct rt_mutex *lock,
  	struct rt_mutex *next_lock;
  
  	lockdep_assert_held(&lock->wait_lock);
-@@ -1083,7 +1084,7 @@ static void remove_waiter(struct rt_mutex *lock,
- 	raw_spin_lock(&waiter->task->pi_lock);
- 	rt_mutex_dequeue_pi(waiter->task, waiter);
- 	waiter->task = NULL;
--	raw_spin_unlock(&current->pi_lock);
-+	raw_spin_unlock(&waiter_task->pi_lock);
  
- 	if (likely(!is_top_waiter))
- 		return;
+-	raw_spin_lock(&current->pi_lock);
++	raw_spin_lock(&waiter->task->pi_lock);
+ 	rt_mutex_dequeue(lock, waiter);
+-	current->pi_blocked_on = NULL;
+-	raw_spin_unlock(&current->pi_lock);
++	waiter->task->pi_blocked_on = NULL;
++	raw_spin_unlock(&waiter->task->pi_lock);
+ 
+ 	/*
