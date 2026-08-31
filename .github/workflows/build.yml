@@ -1018,6 +1018,16 @@ jobs:
           grep -q '^CONFIG_NOMOUNT=y$' "$DEFCONFIG" || echo "CONFIG_NOMOUNT=y" >> "$DEFCONFIG"
           echo "CONFIG_NOMOUNT=y appended to $DEFCONFIG"
 
+      # ==================== 应用 CVE-2026-43499 (rtmutex UAF 修复) ====================
+      - name: 应用 CVE-2026-43499 补丁
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          CVE_PATCH="${{ github.workspace }}/patches/cve_2026_43499_rtmutex.patch"
+          if [ -f "$CVE_PATCH" ]; then
+            echo "应用 CVE-2026-43499 rtmutex 修复补丁..."
+            patch -p1 --forward < "$CVE_PATCH" || true
+          fi
+
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
         run: |
