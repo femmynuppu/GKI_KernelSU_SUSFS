@@ -1491,8 +1491,22 @@ jobs:
           CONFIG_DEFAULT_BBR=y
           CONFIG_DEFAULT_TCP_CONG="bbr"
           CONFIG_NET_SCH_FQ=y
+          CONFIG_TCP_CONG_BIC=n
+          CONFIG_TCP_CONG_WESTWOOD=n
+          CONFIG_TCP_CONG_HTCP=n
+          CONFIG_TCP_CONG_HSTCP=n
+          CONFIG_TCP_CONG_HYBLA=n
+          CONFIG_TCP_CONG_VEGAS=n
+          CONFIG_TCP_CONG_NV=n
+          CONFIG_TCP_CONG_SCALABLE=n
+          CONFIG_TCP_CONG_LP=n
+          CONFIG_TCP_CONG_VENO=n
+          CONFIG_TCP_CONG_YEAH=n
+          CONFIG_TCP_CONG_ILLINOIS=n
+          CONFIG_TCP_CONG_DCTCP=n
+          CONFIG_TCP_CONG_CDG=n
           EOF
-            echo "已启用 TCP BBR 拥塞控制 (DEFAULT_BBR=y)"
+            echo "已启用 TCP BBR 拥塞控制 (DEFAULT_BBR=y, modular non-BBR disabled)"
           else
             echo "TCP BBR 已启用，跳过。"
           fi
