@@ -1484,6 +1484,10 @@ jobs:
             # 6.6+ requires CONFIG_TCP_CONG_ADVANCED to make BBR visible in Kconfig
             if [ "${{ inputs.kernel_version }}" = "6.6" ] || [ "${{ inputs.kernel_version }}" = "6.12" ]; then
               grep -q '^CONFIG_TCP_CONG_ADVANCED=y' "$DEFCONFIG" || echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$DEFCONFIG"
+            elif [ "${{ inputs.kernel_version }}" = "6.1" ]; then
+              sed -i 's/CONFIG_TCP_CONG_BIC=m/# CONFIG_TCP_CONG_BIC is not set/' "$DEFCONFIG" 2>/dev/null || true
+              sed -i 's/CONFIG_TCP_CONG_WESTWOOD=m/# CONFIG_TCP_CONG_WESTWOOD is not set/' "$DEFCONFIG" 2>/dev/null || true
+              sed -i 's/CONFIG_TCP_CONG_HTCP=m/# CONFIG_TCP_CONG_HTCP is not set/' "$DEFCONFIG" 2>/dev/null || true
             fi
             cat >> "$DEFCONFIG" << 'EOF'
           CONFIG_TCP_CONG_ADVANCED=y
@@ -1491,22 +1495,8 @@ jobs:
           CONFIG_DEFAULT_BBR=y
           CONFIG_DEFAULT_TCP_CONG="bbr"
           CONFIG_NET_SCH_FQ=y
-          CONFIG_TCP_CONG_BIC=n
-          CONFIG_TCP_CONG_WESTWOOD=n
-          CONFIG_TCP_CONG_HTCP=n
-          CONFIG_TCP_CONG_HSTCP=n
-          CONFIG_TCP_CONG_HYBLA=n
-          CONFIG_TCP_CONG_VEGAS=n
-          CONFIG_TCP_CONG_NV=n
-          CONFIG_TCP_CONG_SCALABLE=n
-          CONFIG_TCP_CONG_LP=n
-          CONFIG_TCP_CONG_VENO=n
-          CONFIG_TCP_CONG_YEAH=n
-          CONFIG_TCP_CONG_ILLINOIS=n
-          CONFIG_TCP_CONG_DCTCP=n
-          CONFIG_TCP_CONG_CDG=n
           EOF
-            echo "已启用 TCP BBR 拥塞控制 (DEFAULT_BBR=y, modular non-BBR disabled)"
+            echo "已启用 TCP BBR 拥塞控制 (DEFAULT_BBR=y)"
           else
             echo "TCP BBR 已启用，跳过。"
           fi
@@ -1660,7 +1650,7 @@ jobs:
               # 6.1+ 内核使用 Bazel 构建
               # 提取 gki_defconfig 修改到 fragment，避免 bazel trim 检查失败
               FRAG="common/arch/arm64/configs/ksu.fragment"
-              diff "$DEFCONFIG.orig" "$DEFCONFIG" | grep '^>' | sed 's/^> //; s/^[[:space:]]*//' > "$FRAG" || true
+              diff "$DEFCONFIG.orig" "$DEFCONFIG" | grep '^>' | sed 's/^> //; s/^[[:space:]]*//' | grep -v '=n$' > "$FRAG" || true
               cp "$DEFCONFIG.orig" "$DEFCONFIG"
               echo "=== KSU Fragment 内容 ==="
               cat "$FRAG"
