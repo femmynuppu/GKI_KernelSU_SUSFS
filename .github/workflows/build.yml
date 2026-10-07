@@ -1004,13 +1004,13 @@ jobs:
           grep -q '^CONFIG_NOMOUNT=y$' "$DEFCONFIG" || echo "CONFIG_NOMOUNT=y" >> "$DEFCONFIG"
           echo "CONFIG_NOMOUNT=y appended to $DEFCONFIG"
 
-      # ==================== Apply CVE-2026-43499 (rtmutex UAF fix) ====================
-      - name: Apply CVE-2026-43499 rt_mutex Patch
+      # ==================== Apply Ghostlock Mitigations (CVE-2026-43499 & CVE-2026-53163) ====================
+      - name: Apply Ghostlock Mitigations (CVE-2026-43499 & CVE-2026-53163)
         working-directory: ${{ env.KERNEL_ROOT }}/common
         run: |
           CVE_PATCH="${{ github.workspace }}/patches/cve_2026_43499_rtmutex.patch"
           if [ -f "$CVE_PATCH" ]; then
-            echo "Applying CVE-2026-43499 rtmutex fix patch..."
+            echo "Applying Ghostlock rtmutex mitigations (CVE-2026-43499 & CVE-2026-53163)..."
             patch -p1 --forward < "$CVE_PATCH" || true
           fi
 
