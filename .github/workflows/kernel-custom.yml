@@ -120,7 +120,7 @@ on:
         type: boolean
         default: false
       add_nomount:
-        description: "Enable NoMount VFS (Mountless Path Redirection v1.1.0)"
+        description: "Enable NoMount VFS (Mountless Path Redirection v2.1.0)"
         required: false
         type: boolean
         default: true
