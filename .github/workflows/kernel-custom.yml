@@ -109,16 +109,6 @@ on:
         required: false
         type: boolean
         default: false
-      add_zeromount:
-        description: "Enable ZeroMount VFS (Mountless Hiding)"
-        required: false
-        type: boolean
-        default: false
-      add_selinux_evasion:
-        description: "Enable SELinux Evasion Hooks"
-        required: false
-        type: boolean
-        default: false
       add_nomount:
         description: "Enable NoMount VFS (Mountless Path Redirection v2.1.0)"
         required: false
@@ -152,8 +142,6 @@ jobs:
       enable_susfs: ${{ !inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces || 'off' }}
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync || false }}
-      add_zeromount: ${{ inputs.add_zeromount }}
-      add_selinux_evasion: ${{ inputs.add_selinux_evasion }}
       add_nomount: ${{ inputs.add_nomount }}
       use_gkid_opts: ${{ inputs.use_gkid_opts }}
 
