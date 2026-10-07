@@ -1,105 +1,71 @@
 #!/usr/bin/env bash
-# Anchor-based injection of NoMount v1.1.0 VFS hooks into a GKI kernel tree.
-# Designed to coexist with SUSFS + ReSukiSU: uses function-scoped perl substitutions
-# anchored on original kernel lines that SUSFS inserts *after* (not replaces), so the
-# anchors survive prior SUSFS patching. Idempotent (per-file grep guards).
+# Integration of NoMount v2.1.0 into a GKI kernel tree.
+# NoMount v2.x operates via dynamic VFS structure hijacking (i_op, f_op, s_op, d_op)
+# and lives self-contained under fs/nomount/, eliminating intrusive kernel patches.
 #
-# Usage: inject-nomount.sh <SRC_DIR containing nomount.c and nomount.h>
+# Usage: inject-nomount.sh <SRC_DIR containing Kconfig, Makefile, nomount.c, nomount.h>
 # Run from the kernel source root (the dir that contains fs/).
-set -u
-SRC="${1:?usage: inject-nomount.sh <src_dir>}"
-fail=0
+set -eu
 
-echo "=== NoMount VFS injection (src=$SRC) ==="
+SRC="${1:-}"
 
-# --- 1. source files ------------------------------------------------------
-cp "$SRC/nomount.c" fs/nomount.c
-cp "$SRC/nomount.h" fs/nomount.h
-echo "  + fs/nomount.c, fs/nomount.h"
+echo "=== NoMount v2.1.0 VFS Integration ==="
 
-# --- 2. Kconfig + Makefile ------------------------------------------------
-if ! grep -q 'config NOMOUNT' fs/Kconfig; then
-  printf '\nconfig NOMOUNT\n\tbool "NoMount Path Redirection Subsystem"\n\tdefault y\n\thelp\n\t  NoMount allows path redirection and virtual file injection without mounting.\n' >> fs/Kconfig
+# 1. Clean up legacy v1.1.0 files if present
+rm -f fs/nomount.c fs/nomount.h
+if grep -q 'config NOMOUNT' fs/Kconfig; then
+  sed -i '/config NOMOUNT/,/help/d' fs/Kconfig 2>/dev/null || true
 fi
-grep -q 'CONFIG_NOMOUNT' fs/Makefile || printf 'obj-$(CONFIG_NOMOUNT) += nomount.o\n' >> fs/Makefile
-echo "  + Kconfig, Makefile"
+if grep -q 'obj-$(CONFIG_NOMOUNT) += nomount.o' fs/Makefile; then
+  sed -i '/obj-\$(CONFIG_NOMOUNT) += nomount\.o/d' fs/Makefile 2>/dev/null || true
+fi
 
-# --- 3. fs/d_path.c (d_path) ----------------------------------------------
-if ! grep -q 'nomount_handle_dpath' fs/d_path.c; then
-  perl -0777 -pi -e 's/(\nchar \*d_path\(const struct path \*path, char \*buf, int buflen\)\n)/\n#ifdef CONFIG_NOMOUNT\nextern char *nomount_handle_dpath(const struct path *path, char *buf, int buflen);\n#endif\n$1/' fs/d_path.c
-  # 6.6+ uses DECLARE_BUFFER; 5.x uses struct path root / int error.
-  if grep -q 'DECLARE_BUFFER' fs/d_path.c; then
-    perl -0777 -pi -e 's/(char \*d_path\(const struct path \*path, char \*buf, int buflen\)\n\{\n)(\tDECLARE_BUFFER\([^;]+;\n)/$1#ifdef CONFIG_NOMOUNT\n\tchar *nm_path;\n#endif\n$2#ifdef CONFIG_NOMOUNT\n\tnm_path = nomount_handle_dpath(path, buf, buflen);\n\tif (unlikely(nm_path)) {\n\t\treturn nm_path;\n\t}\n#endif\n/s' fs/d_path.c
+# 2. Setup fs/nomount directory
+mkdir -p fs/nomount
+
+if [ -n "$SRC" ] && [ -f "$SRC/nomount.c" ] && [ -f "$SRC/Kconfig" ]; then
+  echo "  + Copying NoMount v2.1.0 from local source: $SRC"
+  cp -f "$SRC/nomount.c" fs/nomount/
+  cp -f "$SRC/nomount.h" fs/nomount/
+  cp -f "$SRC/Kconfig" fs/nomount/
+  cp -f "$SRC/Makefile" fs/nomount/
+else
+  echo "  + Fetching NoMount v2.1.0 from official upstream repository..."
+  TMP_NM="/tmp/nomount_upstream"
+  rm -rf "$TMP_NM"
+  git clone --depth 1 -b "v2.1.0" https://github.com/maxsteeel/nomount.git "$TMP_NM" 2>/dev/null || \
+  git clone --depth 1 https://github.com/maxsteeel/nomount.git "$TMP_NM"
+  cp -f "$TMP_NM/kernel/src/"* fs/nomount/
+  rm -rf "$TMP_NM"
+fi
+
+# 3. Add to fs/Makefile (idempotent)
+if ! grep -q 'nomount/' fs/Makefile; then
+  printf '\nobj-$(CONFIG_NOMOUNT) += nomount/\n' >> fs/Makefile
+  echo "  ✓ fs/Makefile updated"
+else
+  echo "  ✓ fs/Makefile already configured"
+fi
+
+# 4. Add to fs/Kconfig (idempotent)
+if ! grep -q 'source "fs/nomount/Kconfig"' fs/Kconfig; then
+  if grep -q '^endmenu' fs/Kconfig; then
+    awk '
+      /^endmenu/ { last_match = NR }
+      { lines[NR] = $0 }
+      END {
+        for (i = 1; i <= NR; i++) {
+          if (i == last_match) print "source \"fs/nomount/Kconfig\""
+          print lines[i]
+        }
+      }
+    ' fs/Kconfig > fs/Kconfig.tmp && mv fs/Kconfig.tmp fs/Kconfig
   else
-    perl -0777 -pi -e 's/(char \*d_path\(const struct path \*path, char \*buf, int buflen\)\n\{\n)(.*?\n\tint error;\n)/$1#ifdef CONFIG_NOMOUNT\n\tchar *nm_path;\n#endif\n$2#ifdef CONFIG_NOMOUNT\n\tnm_path = nomount_handle_dpath(path, buf, buflen);\n\tif (unlikely(nm_path)) {\n\t\treturn nm_path;\n\t}\n#endif\n/s' fs/d_path.c
+    printf '\nsource "fs/nomount/Kconfig"\n' >> fs/Kconfig
   fi
-  echo "  + d_path.c"
+  echo "  ✓ fs/Kconfig updated"
+else
+  echo "  ✓ fs/Kconfig already configured"
 fi
 
-# --- 4. fs/namei.c (getname x2, generic_permission, inode_permission) -----
-if ! grep -q 'nomount_handle_getname' fs/namei.c; then
-  perl -0777 -pi -e 's/(#define EMBEDDED_NAME_MAX\t\(PATH_MAX - offsetof\(struct filename, iname\)\)\n)/$1#ifdef CONFIG_NOMOUNT\nextern struct filename *nomount_handle_getname(struct filename *name);\nextern int nomount_handle_permission(struct inode *inode, int mask);\n#endif\n/' fs/namei.c
-  perl -0777 -pi -e 's/(\n)(\taudit_getname\(result\);)/$1#ifdef CONFIG_NOMOUNT\n\tif (!IS_ERR(result)) {\n\t\tresult = nomount_handle_getname(result);\n\t}\n#endif\n$2/g' fs/namei.c
-  perl -0777 -pi -e 's/(int generic_permission\(.*?\)\n\{\n\tint ret;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
-  perl -0777 -pi -e 's/(int inode_permission\(.*?\)\n\{\n\tint retval;\n)/$1#ifdef CONFIG_NOMOUNT\n\tint nm_perm = nomount_handle_permission(inode, mask);\n\tif (unlikely(nm_perm < 0)) return nm_perm;\n\tif (unlikely(nm_perm > 0)) return 0;\n#endif\n/s' fs/namei.c
-  echo "  + namei.c"
-fi
-
-# --- 5. fs/proc/task_mmu.c (show_map_vma) ---------------------------------
-if ! grep -q 'nomount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
-  perl -0777 -pi -e 's/(\nstatic void\nshow_map_vma\()/\n#ifdef CONFIG_NOMOUNT\nextern bool nomount_spoof_mmap_metadata(struct inode *inode, dev_t *dev, unsigned long *ino);\n#endif\n$1/' fs/proc/task_mmu.c
-  perl -0777 -pi -e 's/(\n\t\tino = inode->i_ino;\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tnomount_spoof_mmap_metadata((struct inode *)inode, &dev, &ino);\n#endif\n/' fs/proc/task_mmu.c
-  echo "  + task_mmu.c"
-fi
-
-# --- 6. fs/readdir.c (iterate_dir) ----------------------------------------
-if ! grep -q 'nomount_handle_iterate_dir' fs/readdir.c; then
-  perl -0777 -pi -e 's/(\nint iterate_dir\(struct file \*file, struct dir_context \*ctx\)\n)/\n#ifdef CONFIG_NOMOUNT\nextern int nomount_handle_iterate_dir(struct file *file, struct dir_context *ctx);\n#endif\n$1/' fs/readdir.c
-  # 5.x: dual-line if/else dispatch (iterate_shared + iterate)
-  perl -0777 -pi -e 's/(\n\t\tctx->pos = file->f_pos;\n)(\t\tif \(shared\)\n\t\t\tres = file->f_op->iterate_shared\(file, ctx\);\n\t\telse\n\t\t\tres = file->f_op->iterate\(file, ctx\);\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tres = nomount_handle_iterate_dir(file, ctx);\n#else\n$2#endif\n/s' fs/readdir.c
-  # 6.5+: single iterate_shared line (no .iterate f_op)
-  perl -0777 -pi -e 's/(\n\t\tctx->pos = file->f_pos;\n)(\t\tres = file->f_op->iterate_shared\(file, ctx\);\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tres = nomount_handle_iterate_dir(file, ctx);\n#else\n$2#endif\n/s' fs/readdir.c
-  # Robust fallback: match any whitespace-prefixed ctx->pos + iterate_shared
-  perl -0777 -pi -e 's/(\n[ \t]+ctx->pos = file->f_pos;\n)([ \t]+res = file->f_op->iterate_shared\(file, ctx\);\n)/$1#ifdef CONFIG_NOMOUNT\n\t\tres = nomount_handle_iterate_dir(file, ctx);\n#else\n$2#endif\n/s' fs/readdir.c
-  echo "  + readdir.c"
-fi
-
-# --- 7. fs/stat.c (vfs_getattr) -------------------------------------------
-if ! grep -q 'nomount_handle_getattr' fs/stat.c; then
-  perl -0777 -pi -e 's/(EXPORT_SYMBOL\(vfs_getattr_nosec\);\n)/$1\n#ifdef CONFIG_NOMOUNT\nextern int nomount_handle_getattr(int ret, const struct path *path, struct kstat *stat);\n#endif\n/' fs/stat.c
-  perl -0777 -pi -e 's/(\n)(\treturn vfs_getattr_nosec\(path, stat, request_mask, query_flags\);\n)/$1#ifdef CONFIG_NOMOUNT\n\treturn nomount_handle_getattr(vfs_getattr_nosec(path, stat, request_mask, query_flags), path, stat);\n#else\n$2#endif\n/' fs/stat.c
-  echo "  + stat.c"
-fi
-
-# --- 8. fs/statfs.c (vfs_statfs) ------------------------------------------
-if ! grep -q 'nomount_spoof_statfs' fs/statfs.c; then
-  perl -0777 -pi -e 's/(#include "internal.h"\n)/$1\n#ifdef CONFIG_NOMOUNT\nextern void nomount_spoof_statfs(const struct path *path, struct kstatfs *buf);\n#endif\n/' fs/statfs.c
-  perl -0777 -pi -e 's/(\n\t\tbuf->f_flags = calculate_f_flags\(path->mnt\);\n)/$1#ifdef CONFIG_NOMOUNT\n\tnomount_spoof_statfs(path, buf);\n#endif\n/' fs/statfs.c
-  echo "  + statfs.c"
-fi
-
-# --- verify every hook CALL SITE landed (not just the extern decl) --------
-# grep -F on the actual call statement so an extern-only false-positive can't
-# pass when SUSFS/a newer kernel shifts an anchor and the hook silently misses.
-echo "=== verification (hook call-sites) ==="
-check_call() {  # file  call_substring  min_count
-  local f="$1" pat="$2" min="$3" n raw
-  raw=$(grep -Fc "$pat" "$f" 2>/dev/null) || raw=0
-  n=$(echo "$raw" | tr -d '[:space:]')
-  [[ "$n" =~ ^[0-9]+$ ]] || n=0
-  if [[ "$n" -ge "$min" ]]; then
-    echo "  ok   $f  ($pat x$n)"
-  else
-    echo "  FAIL $f  ($pat x$n, need $min) — anchor shifted, hook NOT injected"
-    fail=1
-  fi
-}
-check_call fs/d_path.c        'nm_path = nomount_handle_dpath(path, buf, buflen);'  1
-check_call fs/namei.c         'result = nomount_handle_getname(result);'            2
-check_call fs/namei.c         'nm_perm = nomount_handle_permission(inode, mask);'   2
-check_call fs/proc/task_mmu.c 'nomount_spoof_mmap_metadata((struct inode *)inode, &dev, &ino);'     1
-check_call fs/readdir.c       'res = nomount_handle_iterate_dir(file, ctx);'        1
-check_call fs/stat.c          'return nomount_handle_getattr(vfs_getattr_nosec('    1
-check_call fs/statfs.c        'nomount_spoof_statfs(path, buf);'                     1
-
-[ "$fail" -eq 0 ] && echo "NoMount injection OK" || { echo "NoMount injection had failures"; exit 1; }
+echo "=== NoMount v2.1.0 successfully integrated ==="

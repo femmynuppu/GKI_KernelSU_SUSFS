@@ -994,9 +994,8 @@ jobs:
             echo "::warning::fix-susfs-compat.sh not found, skipping"
           fi
 
-      # ==================== Inject NoMount VFS (anchor-based) ====================
-      # NoMount v1.1.0 mountless VFS redirection. Injected AFTER SUSFS so its anchors
-      # (original kernel lines SUSFS appends after) survive. Coexists with BakaSU+SUSFS.
+      # ==================== Inject NoMount VFS ====================
+      # NoMount v2.1.0 mountless VFS redirection via dynamic structure hijacking. Coexists cleanly with BakaSU+SUSFS.
       - name: Inject NoMount VFS Hooks
         if: inputs.add_nomount
         working-directory: ${{ env.KERNEL_ROOT }}/common

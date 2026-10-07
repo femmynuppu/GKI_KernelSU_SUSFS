@@ -24,7 +24,7 @@ This repository provides an automated CI/CD build pipeline for **Android Generic
 
 * **BakaSU Root Solution**: Full integration of [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU) (downstream KernelSU fork with native SUSFS support).
 * **SUSFS Root Hiding**: Kernel-level inline hooks for stealth root hiding (`sus_path`, `sus_mount`, `sus_kstat`, `sus_map`, `open_redirect`, and uname spoofing).
-* **NoMount VFS (v1.1.0)**: Mountless path redirection and virtual file injection without triggering Android VFS mountpoint inspection or peer group gap detection.
+* **NoMount VFS (v2.1.0)**: Mountless path redirection, virtual file injection, and whiteout hiding without triggering Android VFS mountpoint inspection or peer group gap detection. Operates cleanly via dynamic VFS structure hijacking.
 * **TCP BBR Default**: TCP congestion control configured to BBR by default with FQ pacing (`CONFIG_DEFAULT_BBR=y`).
 * **ZRAM LZ4KD Compression**: High-efficiency, low-latency ZRAM decompression algorithm (`CONFIG_ZRAM_DEF_COMP_LZ4KD=y`) for optimized memory throughput.
 * **Baseband Guard (BBG)**: Partition protection hooks preventing malicious scripts or rogue apps from wiping critical NVRAM/EFS/radio partitions.
