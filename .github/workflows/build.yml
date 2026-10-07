@@ -81,18 +81,10 @@ on:
         required: false
         type: boolean
         default: false
-      add_zeromount:
-        required: false
-        type: boolean
-        default: false
-      add_selinux_evasion:
-        required: false
-        type: boolean
-        default: false
       add_nomount:
         required: false
         type: boolean
-        default: false
+        default: true
       use_gkid_opts:
         required: false
         type: boolean
@@ -131,8 +123,6 @@ jobs:
           echo "Re-Kernel        : ${{ inputs.use_rekernel }}"
           echo "Droidspaces      : ${{ inputs.droidspaces }}"
           echo "NTSync           : ${{ inputs.droidspaces_ntsync }}"
-          echo "ZeroMount        : ${{ inputs.add_zeromount }}"
-          echo "SELinux Evasion  : ${{ inputs.add_selinux_evasion }}"
           echo "NoMount VFS      : ${{ inputs.add_nomount }}"
           echo "Stock Defconfig  : Auto-detect config/stock_defconfig"
           echo "========================================"
@@ -741,251 +731,6 @@ jobs:
               fi
             fi
           fi
-
-      # ==================== Apply ZeroMount VFS (anchor-based) ====================
-      - name: Inject ZeroMount VFS Hooks
-        if: inputs.add_zeromount && inputs.enable_susfs
-        working-directory: ${{ env.KERNEL_ROOT }}/common
-        run: |
-          SRC="$GITHUB_WORKSPACE/src/zeromount"
-          echo "=== ZeroMount anchor-based injection ==="
-
-          # 1. Copy zeromount source files (new files, no patching needed)
-          cp "$SRC/zeromount.c" fs/zeromount.c
-          cp "$SRC/zeromount.h" include/linux/zeromount.h
-          echo "  ✓ zeromount.c + zeromount.h copied"
-
-          # 2. Add Kconfig entry (idempotent)
-          if ! grep -q 'config ZEROMOUNT' fs/Kconfig; then
-            printf '\nconfig ZEROMOUNT\n	bool "ZeroMount Virtual Filesystem"\n	default y\n	help\n	  ZeroMount allows path redirection and virtual file injection\n	  without mounting filesystems.\n' >> fs/Kconfig
-            echo "  ✓ Kconfig updated"
-          fi
-
-          # 3. Add Makefile entry (idempotent)
-          grep -q 'CONFIG_ZEROMOUNT' fs/Makefile || \
-            printf 'obj-$(CONFIG_ZEROMOUNT)\t\t+= zeromount.o\n' >> fs/Makefile
-          echo "  ✓ Makefile updated"
-
-          # 4. Inject include + hooks per file (idempotent, anchor-based)
-          # Anchor: stable strings NOT modified by SUSFS
-
-          # --- fs/d_path.c ---
-          if ! grep -q '<linux/zeromount.h>' fs/d_path.c; then
-            sed -i '/^#include <linux\/prefetch.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/d_path.c
-          fi
-          if ! grep -q 'zeromount_get_static_vpath' fs/d_path.c; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (path->dentry && d_backing_inode(path->dentry)) {\n\t\tchar *v_path = zeromount_get_static_vpath(d_backing_inode(path->dentry));\n\t\tif (v_path) {\n\t\t\tint len = strlen(v_path);\n\t\t\tif (buflen < len + 1) {\n\t\t\t\tkfree(v_path);\n\t\t\t\treturn ERR_PTR(-ENAMETOOLONG);\n\t\t\t}\n\t\t\t*--res = '"'"'\\0'"'"';\n\t\t\tres -= len;\n\t\t\tmemcpy(res, v_path, len);\n\t\t\tkfree(v_path);\n\t\t\treturn res;\n\t\t}\n\t}\n#endif\n' > /tmp/zm_dpath_hook
-            # Anchor: inject AFTER 'int error;' inside d_path() — matches 60_zeromount.patch line 43-62
-            sed -i '/^char \*d_path(const struct path \*path, char \*buf, int buflen)$/,/^}$/{
-              /^[[:space:]]*int error;$/{
-                r /tmp/zm_dpath_hook
-              }
-            }' fs/d_path.c 2>/dev/null || true
-            rm -f /tmp/zm_dpath_hook
-          fi
-          echo "  ✓ d_path.c"
-
-          # --- fs/namei.c (3 hooks: getname_flags, generic_permission, inode_permission) ---
-          if ! grep -q '<linux/zeromount.h>' fs/namei.c; then
-            sed -i '/^#include <trace\/events\/namei.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/namei.c
-          fi
-          # Hook A: getname_flags() — after audit_getname(result)
-          if ! grep -q 'zeromount_getname_hook' fs/namei.c; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (!IS_ERR(result)) {\n\t\tresult = zeromount_getname_hook(result);\n\t}\n#endif\n' > /tmp/zm_namei_getname
-            sed -i '/audit_getname(result);/r /tmp/zm_namei_getname' fs/namei.c 2>/dev/null || true
-            rm -f /tmp/zm_namei_getname
-          fi
-          # Hook B: generic_permission() — after int ret;
-          if ! grep -q 'zeromount_is_injected_file' fs/namei.c; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (zeromount_is_injected_file(inode)) {\n\t\tif (mask & MAY_WRITE)\n\t\t\treturn -EACCES;\n\t\treturn 0;\n\t}\n\n\tif (S_ISDIR(inode->i_mode) && zeromount_is_traversal_allowed(inode, mask)) {\n\t\treturn 0;\n\t}\n#endif\n' > /tmp/zm_namei_gperm
-            sed -i '/^int generic_permission(struct inode \*inode, int mask)$/,/^}$/{\n  /^[[:space:]]*int ret;$/\{\n    r /tmp/zm_namei_gperm\n  \}\n}' fs/namei.c 2>/dev/null || true
-            rm -f /tmp/zm_namei_gperm
-          fi
-          # Hook C: inode_permission() — after int retval;
-          if [ $(grep -c 'zeromount_is_injected_file' fs/namei.c) -lt 2 ]; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (zeromount_is_injected_file(inode)) {\n\t\tif (mask & MAY_WRITE)\n\t\t\treturn -EACCES;\n\t\treturn 0;\n\t}\n\n\tif (S_ISDIR(inode->i_mode) && zeromount_is_traversal_allowed(inode, mask)) {\n\t\treturn 0;\n\t}\n#endif\n' > /tmp/zm_namei_iperm
-            sed -i '/^int inode_permission(struct inode \*inode, int mask)$/,/^}$/{\n  /^[[:space:]]*int retval;$/\{\n    r /tmp/zm_namei_iperm\n  \}\n}' fs/namei.c 2>/dev/null || true
-            rm -f /tmp/zm_namei_iperm
-          fi
-          echo "  ✓ namei.c"
-
-          # --- fs/open.c ---
-          if ! grep -q '<linux/zeromount.h>' fs/open.c; then
-            sed -i '/^#include <linux\/dnotify.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/open.c
-          fi
-          # Hook: do_sys_openat2() — after tmp = getname(filename)
-          if ! grep -q 'zeromount_getname_hook' fs/open.c; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\ttmp = zeromount_getname_hook(tmp);\n#endif\n' > /tmp/zm_open_hook
-            sed -i '/tmp = getname(filename);/r /tmp/zm_open_hook' fs/open.c 2>/dev/null || true
-            rm -f /tmp/zm_open_hook
-          fi
-          echo "  ✓ open.c"
-
-          # --- fs/proc/base.c (include + do_proc_readlink hook) ---
-          if ! grep -q '<linux/zeromount.h>' fs/proc/base.c; then
-            sed -i '/^#include "internal.h"$/i #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/proc/base.c
-          fi
-          if ! grep -q 'zeromount_should_skip' fs/proc/base.c; then
-            printf '\n#ifdef CONFIG_ZEROMOUNT\n\tif (!zeromount_should_skip() && path->dentry) {\n\t\tstruct inode *inode = d_backing_inode(path->dentry);\n\t\tif (inode) {\n\t\t\tchar *vpath = zeromount_get_static_vpath(inode);\n\t\t\tif (vpath) {\n\t\t\t\tint vlen = strlen(vpath);\n\t\t\t\tif (vlen > buflen)\n\t\t\t\t\tvlen = buflen;\n\t\t\t\tif (copy_to_user(buffer, vpath, vlen) == 0) {\n\t\t\t\t\tkfree(vpath);\n\t\t\t\t\tfree_page((unsigned long)tmp);\n\t\t\t\t\treturn vlen;\n\t\t\t\t}\n\t\t\t\tkfree(vpath);\n\t\t\t}\n\t\t}\n\t}\n#endif\n' > /tmp/zm_proc_base_hook
-            sed -i '/^static int do_proc_readlink/,/^}$/{
-              /return -ENOMEM;$/{
-                r /tmp/zm_proc_base_hook
-              }
-            }' fs/proc/base.c 2>/dev/null || true
-            rm -f /tmp/zm_proc_base_hook
-          fi
-          echo "  ✓ proc/base.c (include + do_proc_readlink hook)"
-
-          # --- fs/proc/task_mmu.c (v2.1.0-only, simplified) ---
-          if ! grep -q '<linux/zeromount.h>' fs/proc/task_mmu.c; then
-            sed -i '/^#include <linux\/pkeys.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/proc/task_mmu.c
-          fi
-          if ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
-            # Write injection block to temp file, use sed 'r' to insert
-            printf '\t\t#ifdef CONFIG_ZEROMOUNT\n\t\tzeromount_spoof_mmap_metadata(inode, &dev, &ino);\n\t\t#endif\n' > /tmp/zm_task_mmu_hook
-            sed -i '/susfs_sus_kstat_spoof_show_map_vma(inode, &dev, &ino);/r /tmp/zm_task_mmu_hook' fs/proc/task_mmu.c
-            rm -f /tmp/zm_task_mmu_hook
-          fi
-          echo "  ✓ proc/task_mmu.c"
-
-          # --- fs/readdir.c (DUAL v2.0.0/v2.1.0) ---
-          if ! grep -q '<linux/zeromount.h>' fs/readdir.c; then
-            sed -i '/^#include <linux\/fsnotify.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/readdir.c
-          fi
-          if ! grep -q 'zeromount_inject_dents' fs/readdir.c; then
-            # Anchor: error = iterate_dir( — stable across v2.0.0 and v2.1.0
-            printf '#ifdef CONFIG_ZEROMOUNT\n\tif (error >= 0 && !signal_pending(current))\n\t\tzeromount_inject_dents(f.file, (void __user **)&dirent,\n\t\t\t&count, &f.file->f_pos);\n#endif\n' > /tmp/zm_readdir_hook
-            sed -i '/error = iterate_dir(f\.file, &buf\.ctx);/r /tmp/zm_readdir_hook' fs/readdir.c
-            rm -f /tmp/zm_readdir_hook
-          fi
-          echo "  ✓ readdir.c"
-
-          # --- fs/stat.c (include + vfs_statx hook) ---
-          if ! grep -q '<linux/zeromount.h>' fs/stat.c; then
-            sed -i '/^#include <linux\/uaccess.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/stat.c
-          fi
-          if ! grep -q 'zeromount_stat_hook' fs/stat.c; then
-            # Inject static helper from pre-written file (avoids YAML heredoc issues)
-            ZM_LINE=$(grep -n '^static int vfs_statx(int dfd, const char __user \*filename, int flags,$' fs/stat.c | head -1 | cut -d: -f1)
-            if [ -n "$ZM_LINE" ]; then
-              head -n $((ZM_LINE - 1)) fs/stat.c > /tmp/zm_stat_tmp
-              cat "$SRC/stat_hook.c" >> /tmp/zm_stat_tmp
-              tail -n +$ZM_LINE fs/stat.c >> /tmp/zm_stat_tmp
-              mv /tmp/zm_stat_tmp fs/stat.c
-            fi
-            # Inject call inside vfs_statx AFTER int error;
-            printf '#ifdef CONFIG_ZEROMOUNT\n\t/* Try ZeroMount hook for relative paths */\n\tif (filename) {\n\t\tint zm_ret = zeromount_stat_hook(dfd, filename, stat, request_mask, flags);\n\t\tif (zm_ret != -ENOENT)\n\t\t\treturn zm_ret;\n\t}\n#endif\n' > /tmp/zm_stat_call
-            sed -i '/^static int vfs_statx/,/^}$/{
-              /^[[:space:]]*int error;$/{
-                r /tmp/zm_stat_call
-              }
-            }' fs/stat.c 2>/dev/null || true
-            rm -f /tmp/zm_stat_call
-          fi
-          echo "  ✓ stat.c (include + vfs_statx hook)"
-
-          # --- fs/statfs.c ---
-          if ! grep -q '<linux/zeromount.h>' fs/statfs.c; then
-            sed -i '/^#include <linux\/security.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/statfs.c
-          fi
-          # Hook: user_statfs() — after vfs_statfs(&path, st);
-          if ! grep -q 'zeromount_spoof_statfs' fs/statfs.c; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\t\tzeromount_spoof_statfs(pathname, st);\n#endif\n' > /tmp/zm_statfs_hook
-            sed -i '/^[[:space:]]*error = vfs_statfs(\\&path, st);$/r /tmp/zm_statfs_hook' fs/statfs.c 2>/dev/null || true
-            rm -f /tmp/zm_statfs_hook
-          fi
-          echo "  ✓ statfs.c"
-
-          # --- fs/xattr.c ---
-          if ! grep -q '<linux/zeromount.h>' fs/xattr.c; then
-            sed -i '/^#include <linux\/xattr.h>$/a #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/xattr.c
-          fi
-          # Hook: vfs_getxattr() — at function entry, before __vfs_getxattr
-          if ! grep -q 'zeromount_spoof_xattr' fs/xattr.c; then
-            printf '#ifdef CONFIG_ZEROMOUNT\n\tssize_t zm_ret;\n\tzm_ret = zeromount_spoof_xattr(dentry, name, value, size);\n\tif (zm_ret != -EOPNOTSUPP)\n\t\treturn zm_ret;\n#endif\n' > /tmp/zm_xattr_hook
-            sed -i '/^vfs_getxattr(struct dentry \*dentry, const char \*name, void \*value, size_t size)$/,/^}$/{
-              /^{$/\{\n                r /tmp/zm_xattr_hook\n              \}
-            }' fs/xattr.c 2>/dev/null || true
-            rm -f /tmp/zm_xattr_hook
-          fi
-          echo "  ✓ xattr.c"
-
-          # 5. Enable CONFIG_ZEROMOUNT in defconfig
-          grep -q '^CONFIG_ZEROMOUNT=y' "$DEFCONFIG" || echo "CONFIG_ZEROMOUNT=y" >> "$DEFCONFIG"
-          echo "  ✓ CONFIG_ZEROMOUNT enabled"
-
-      # ==================== Apply SELinux Evasion Hooks (anchor-based) ====================
-      - name: Inject SELinux Evasion Hooks
-        if: inputs.add_selinux_evasion && inputs.enable_susfs
-        working-directory: ${{ env.KERNEL_ROOT }}/common
-        run: |
-          SRC="$GITHUB_WORKSPACE/src/susfs"
-          echo "=== SELinux Evasion anchor-based injection ==="
-
-          # 1. Copy susfs_selinux source files into SELinux directory
-          cp "$SRC/susfs_selinux.c" security/selinux/susfs_selinux.c
-          cp "$SRC/susfs_selinux.h" security/selinux/susfs_selinux.h
-          echo "  ✓ susfs_selinux.c + susfs_selinux.h copied"
-
-          # 2. Add Makefile entry to compile susfs_selinux.o
-          #    Uses existing CONFIG_KSU_SUSFS (no new Kconfig needed)
-          if ! grep -q 'susfs_selinux.o' security/selinux/Makefile; then
-            printf 'selinux-\$(CONFIG_KSU_SUSFS) += susfs_selinux.o\n' >> security/selinux/Makefile
-            echo "  ✓ Makefile updated"
-          fi
-
-          # 3. Inject include + hooks per file (idempotent, anchor-based)
-          #    All hooks guarded by existing CONFIG_KSU_SUSFS
-
-          # --- security/selinux/selinuxfs.c: hook sel_read_policy ---
-          if ! grep -q 'susfs_selinux.h' security/selinux/selinuxfs.c; then
-            sed -i '/^#include "security.h"$/a #ifdef CONFIG_KSU_SUSFS\n#include "susfs_selinux.h"\n#endif' security/selinux/selinuxfs.c
-          fi
-          if ! grep -q 'susfs_selinux_hook_read_policy' security/selinux/selinuxfs.c; then
-            printf '#ifdef CONFIG_KSU_SUSFS\n\tint hook_ret = susfs_selinux_hook_read_policy(buf, count, ppos, data, len);\n\tif (hook_ret != -ENOSYS) {\n\t\tkfree(data);\n\t\treturn hook_ret;\n\t}\n#endif\n' > /tmp/se_hook_policy
-            # Anchor: AFTER security_read_policy() call, BEFORE simple_read_from_buffer
-            sed -i '/^static ssize_t sel_read_policy/,/^}$/{
-              /rc = security_read_policy(state, &data, &len);/{
-                r /tmp/se_hook_policy
-              }
-            }' security/selinux/selinuxfs.c 2>/dev/null || true
-            rm -f /tmp/se_hook_policy
-          fi
-          echo "  ✓ selinuxfs.c (sel_read_policy hook)"
-
-          # --- security/selinux/ss/services.c: hook security_check_context ---
-          if ! grep -q 'susfs_selinux.h' security/selinux/ss/services.c; then
-            sed -i '/^#include "security.h"$/a #ifdef CONFIG_KSU_SUSFS\n#include "susfs_selinux.h"\n#endif' security/selinux/ss/services.c
-          fi
-          if ! grep -q 'susfs_selinux_hook_check_context' security/selinux/ss/services.c; then
-            printf '#ifdef CONFIG_KSU_SUSFS\n\tint hook_ret = susfs_selinux_hook_check_context(scontext, scontext_len);\n\tif (hook_ret != -ENOSYS)\n\t\treturn hook_ret;\n#endif\n' > /tmp/se_hook_ctx
-            # Anchor: BEFORE context_struct_to_sid() call
-            sed -i '/^int security_check_context/,/^}$/{
-              /rc = context_struct_to_sid(policydb, scontext, scontext_len, &sid, sidtab);/{
-                r /tmp/se_hook_ctx
-              }
-            }' security/selinux/ss/services.c 2>/dev/null || true
-            rm -f /tmp/se_hook_ctx
-          fi
-          echo "  ✓ services.c (security_check_context hook)"
-
-          # --- security/selinux/avc.c: hook avc_audit ---
-          if ! grep -q 'susfs_selinux.h' security/selinux/avc.c; then
-            sed -i '/^#include "avc.h"$/a #ifdef CONFIG_KSU_SUSFS\n#include "susfs_selinux.h"\n#endif' security/selinux/avc.c
-          fi
-          if ! grep -q 'susfs_selinux_hook_avc_audit' security/selinux/avc.c; then
-            printf '#ifdef CONFIG_KSU_SUSFS\n\tif (susfs_selinux_hook_avc_audit(ssid, tsid, tclass, requested) == 1)\n\t\treturn;\n#endif\n' > /tmp/se_hook_avc
-            # Anchor: AFTER variable declarations, BEFORE audit logic
-            sed -i '/^void avc_audit(/,/^}$/{
-              /u32 denied, audited, result;$/{
-                r /tmp/se_hook_avc
-              }
-            }' security/selinux/avc.c 2>/dev/null || true
-            rm -f /tmp/se_hook_avc
-          fi
-          echo "  ✓ avc.c (avc_audit hook)"
-
-          echo "=== SELinux Evasion injection complete ==="
 
       # ==================== SUSFS Compatibility Fixes ====================
       - name: Run SUSFS Compatibility Fixes
@@ -1740,11 +1485,9 @@ jobs:
 
           [ "${{ inputs.enable_susfs }}" = "true" ] && S_SUSFS="✅ ACTIVE (Inline Hook v2.3.0)" || S_SUSFS="❌ DISABLED"
           [ "${{ inputs.add_nomount }}" = "true" ] && S_NOMOUNT="✅ ACTIVE (Modular v2.1.0 fs/nomount/)" || S_NOMOUNT="❌ DISABLED"
-          [ "${{ inputs.add_zeromount }}" = "true" ] && S_ZEROMOUNT="✅ ACTIVE" || S_ZEROMOUNT="❌ DISABLED"
           [ "${{ inputs.use_bbg }}" = "true" ] && S_BBG="✅ ACTIVE (Anti-Wipe Protection)" || S_BBG="❌ DISABLED"
           [ "${{ inputs.use_zram }}" = "true" ] && S_ZRAM="✅ ACTIVE (LZ4KD Enhanced)" || S_ZRAM="❌ DISABLED"
           [ "${{ inputs.use_gkid_opts }}" = "true" ] && S_GKID="✅ ACTIVE (MGLRU, F2FS GC 50ms, 1s Freezer, ARM64 Memops)" || S_GKID="❌ DISABLED"
-          [ "${{ inputs.add_selinux_evasion }}" = "true" ] && S_SELINUX="✅ ACTIVE" || S_SELINUX="❌ DISABLED"
           [ "${{ inputs.use_rekernel }}" = "true" ] && S_REKERNEL="✅ ACTIVE" || S_REKERNEL="❌ DISABLED"
           [ "${{ inputs.supp_op }}" = "true" ] && S_SUPP_OP="✅ ACTIVE" || S_SUPP_OP="❌ DISABLED"
           [ "${{ inputs.droidspaces_ntsync }}" = "true" ] && S_NTSYNC="✅ ACTIVE" || S_NTSYNC="❌ DISABLED"
@@ -1767,13 +1510,11 @@ jobs:
           echo "  ACTIVE SUBSYSTEMS & ROOT-HIDING MATRIX:"
           printf "  • SUSFS Root Hiding      : %s\n" "$S_SUSFS"
           printf "  • NoMount VFS            : %s\n" "$S_NOMOUNT"
-          printf "  • ZeroMount VFS          : %s\n" "$S_ZEROMOUNT"
           printf "  • Baseband Guard (BBG)   : %s\n" "$S_BBG"
           printf "  • TCP Congestion Control : ✅ ACTIVE (BBR Default)\n"
           printf "  • ZRAM Memory Engine     : %s\n" "$S_ZRAM"
           printf "  • GKID Performance Suite : %s\n" "$S_GKID"
           printf "  • Ghostlock Mitigations  : ✅ MITIGATED (CVE-2026-43499 & CVE-2026-53163)\n"
-          printf "  • SELinux Evasion Hooks  : %s\n" "$S_SELINUX"
           printf "  • Droidspaces Container  : %s\n" "$S_DROID"
           printf "  • NTSync Driver          : %s\n" "$S_NTSYNC"
           printf "  • OnePlus 8E Processor   : %s\n" "$S_SUPP_OP"
@@ -1802,13 +1543,11 @@ jobs:
           |---|---|---|
           | **SUSFS** | $S_SUSFS | Kernel-level root hiding (Inline Hook v2.3.0) |
           | **NoMount VFS** | $S_NOMOUNT | Modular VFS structure hijacking v2.1.0 in \`fs/nomount/\` |
-          | **ZeroMount VFS** | $S_ZEROMOUNT | Dynamic mountless inode redirection |
           | **Baseband Guard (BBG)** | $S_BBG | Anti-wipe modem partition protection |
           | **TCP Congestion** | ✅ ACTIVE | TCP BBR (Default Congestion Control) |
           | **ZRAM Compression** | $S_ZRAM | LZ4KD high-ratio memory compression |
           | **GKID Optimizations** | $S_GKID | MGLRU force-on, F2FS GC 50ms, 1s process freezer, ARM64 memops |
           | **Ghostlock Mitigations** | ✅ MITIGATED | Clean backport for CVE-2026-43499 & CVE-2026-53163 in \`rtmutex.c\` |
-          | **SELinux Evasion** | $S_SELINUX | Enforcing mode bypass hooks |
           | **Droidspaces / NTSync** | $S_DROID | Container slot patch (\`$DS_MODE\`) / NTSync driver |
 
           > 💡 **Installation:** Flash the AnyKernel3 zip via **Kernel Flasher** or custom recovery (**TWRP / OrangeFox**).
