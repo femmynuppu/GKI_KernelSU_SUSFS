@@ -1,6 +1,6 @@
-name: Android 内核构建-自定义
+name: GKI Kernel Build - Custom
 
-# 适配 Node.js 24
+# Adapt to Node.js 24
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -11,9 +11,9 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      # ==================== 内核版本配置 ====================
+      # ==================== Kernel Version Configuration ====================
       android_version:
-        description: "Android 版本"
+        description: "Android Version (e.g. android12, android14)"
         required: true
         type: choice
         options:
@@ -24,7 +24,7 @@ on:
           - android16
         default: android12
       kernel_version:
-        description: "内核版本"
+        description: "Linux Kernel Version"
         required: true
         type: choice
         options:
@@ -35,68 +35,67 @@ on:
           - "6.12"
         default: "5.10"
       sub_level:
-        description: "子版本号 (如 66, 198, X)"
+        description: "Kernel Sublevel (e.g. 66, 118, 236, X)"
         required: true
         type: string
         default: "66"
       os_patch_level:
-        description: "安全补丁级别 (如 2022-01, lts)"
+        description: "Security Patch Level (e.g. 2025-05, lts)"
         required: true
         type: string
         default: "2022-01"
       revision:
-        description: "修订版本 (如 r11, 仅 5.10 需要)"
+        description: "Revision (e.g. r1, r11 - 5.10 only)"
         required: false
         type: string
         default: "r11"
 
-      # ==================== KernelSU 配置 ====================
-      # KernelSU 变体固定为 BakaSU (原 ReSukiSU)
+      # ==================== KernelSU Configuration ====================
       kernelsu_branch:
-        description: "BakaSU 分支 (main/自定义commit hash，留空使用默认)"
+        description: "BakaSU Branch (main/custom commit hash, empty=default)"
         required: false
         type: string
         default: ""
 
-      # ==================== 可选配置 ====================
+      # ==================== Optional Spoofing Configuration ====================
       version:
-        description: "自定义版本名 (可选)"
+        description: "Custom / Spoofed Kernel Release Name (Optional)"
         required: false
         type: string
       build_time:
-        description: "自定义构建时间 (可选，N或留空=当前UTC)"
+        description: "Custom / Spoofed Build Timestamp (Optional, N or empty=current UTC)"
         required: false
         type: string
         default: "Sun Dec 01 08:10:00 UTC 2024"
 
-      # ==================== 功能开关 ====================
+      # ==================== Feature Switches ====================
       use_zram:
-        description: "启用 ZRAM 增强算法"
+        description: "Enable ZRAM LZ4KD Enhanced Compression"
         required: true
         type: boolean
         default: false
       use_bbg:
-        description: "启用 BBG 防格机"
+        description: "Enable Baseband Guard (BBG) Anti-Wipe Protection"
         required: true
         type: boolean
         default: false
       use_rekernel:
-        description: "启用 Re-Kernel 驱动"
+        description: "Enable Re-Kernel Driver (Experimental)"
         required: false
         type: boolean
         default: false
       cancel_susfs:
-        description: "禁用 SUSFS"
+        description: "Disable SUSFS (true=disable, false=enable)"
         required: true
         type: boolean
         default: false
       supp_op:
-        description: "启用一加 8E 支持"
+        description: "Enable OnePlus 8E Processor Support"
         required: false
         type: boolean
         default: false
       droidspaces:
-        description: "Droidspaces 容器支持 (5.10~6.6: 槽位补丁, 6.12: 开/关)"
+        description: "Droidspaces Container Support (5.10~6.6: slot patch, 6.12: on/off)"
         required: false
         type: choice
         options:
@@ -106,25 +105,25 @@ on:
           - "345"
         default: "off"
       droidspaces_ntsync:
-        description: "启用 Droidspaces 容器 NTSync 支持（需启用 Droidspaces）"
+        description: "Enable NTSync for Droidspaces Container"
         required: false
         type: boolean
         default: false
       add_zeromount:
-        description: "启用 ZeroMount VFS (mountless 隐藏)"
-        required: false
-        type: boolean
-        default: true
-      add_selinux_evasion:
-        description: "启用 SELinux Evasion hooks (隐藏策略读取/上下文检查/AVC审计)"
-        required: false
-        type: boolean
-        default: true
-      add_nomount:
-        description: "启用 NoMount VFS (mountless 路径重定向, v1.1.0)"
+        description: "Enable ZeroMount VFS (Mountless Hiding)"
         required: false
         type: boolean
         default: false
+      add_selinux_evasion:
+        description: "Enable SELinux Evasion Hooks"
+        required: false
+        type: boolean
+        default: false
+      add_nomount:
+        description: "Enable NoMount VFS (Mountless Path Redirection v1.1.0)"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-custom-kernel:
