@@ -37,9 +37,9 @@ on:
         default: Actions
 
       # ==================== KernelSU 配置 ====================
-      # KernelSU 变体固定为 ReSukiSU
+      # KernelSU 变体固定为 BakaSU (原 ReSukiSU)
       kernelsu_branch:
-        description: "ReSukiSU branch (main/dev/自定义，留空使用main)"
+        description: "BakaSU branch (main/dev/自定义，留空使用main)"
         type: string
         default: "main"
         required: false
@@ -258,9 +258,9 @@ jobs:
 
   # ==================== 创建发布 ====================
   # 当 release_type 不是 Actions 时，创建 GitHub Release
-  # 仅限原仓库运行，fork 仓库跳过此步骤
+  # 仅限指定仓库运行，fork 仓库跳过此步骤
   release:
-    if: ${{ always() && !cancelled() && inputs.release_type != 'Actions' && github.repository == 'ReSukiSU-GKI/GKI_KernelSU_SUSFS' }}
+    if: ${{ always() && !cancelled() && inputs.release_type != 'Actions' && (github.repository == 'ReSukiSU-GKI/GKI_KernelSU_SUSFS' || github.repository == 'femmynuppu/GKI_KernelSU_SUSFS' || github.repository == 'Baka-SU/GKI_KernelSU_SUSFS') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -284,7 +284,7 @@ jobs:
       # 预计算各种显示名称，简化后续引用
       - name: 设置显示名称
         run: |
-          KSU_NAME="ReSukiSU"
+          KSU_NAME="BakaSU"
           echo "KSU_NAME=$KSU_NAME" >> $GITHUB_ENV
 
           KSU_VER="${{ needs.get-manager.outputs.ksuVer }}"
@@ -338,8 +338,8 @@ jobs:
 
       - name: 获取 KernelSU 提交信息
         run: |
-          REPO_URL="https://github.com/ReSukiSU/ReSukiSU.git"
-          REPO_URL2="ReSukiSU/ReSukiSU"
+          REPO_URL="https://github.com/Baka-SU/BakaSU.git"
+          REPO_URL2="Baka-SU/BakaSU"
 
           # 如果用户输入了自定义分支/commit，优先使用
           if [ -n "${{ inputs.kernelsu_branch }}" ]; then
@@ -462,7 +462,7 @@ jobs:
           <details>
           <summary>🔗 提交信息 / Commit Info</summary>
 
-          **KernelSU (ReSukiSU)**: [${{ env.KSU_REF }}](${{ env.KSU_URL }})
+          **KernelSU (BakaSU)**: [${{ env.KSU_REF }}](${{ env.KSU_URL }})
 
           **SUSFS4KSU**:
           - gki-android12-5.10: [${{ env.COMMIT_HASH_gki_android12_5_10 }}](${{ env.COMMIT_URL_gki_android12_5_10 }})
@@ -573,21 +573,21 @@ jobs:
           Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
           
-          Features: 
-          <pre>ReSukiSU = true
+          Features:
+          <pre>BakaSU = true
           SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
           BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
           LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
           Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
           Droidspaces = ${{ inputs.droidspaces }}${{ inputs.droidspaces_ntsync && ' + NTSync' || '' }}
           KPatch-Next Support = true</pre>
-          Change Log: 
+          Change Log:
           <pre>${INPUT_CHANGE_LOG}
           </pre>
-          
-          Download: <a href="https://github.com/ReSukiSU-GKI/GKI_KernelSU_SUSFS/releases/tag/${NEW_TAG}">Click Here</a>
 
-          Note: The "commit" here refers to ReSukiSU's commit, not this repository's.
+          Download: <a href="https://github.com/${{ github.repository }}/releases/tag/${NEW_TAG}">Click Here</a>
+
+          Note: The "commit" here refers to BakaSU's commit, not this repository's.
           EOF
           )
 
@@ -595,8 +595,8 @@ jobs:
             -d chat_id="${CHAT_ID}" \
             -d parse_mode="HTML" \
             --data-urlencode text="${TEXT}"
-            
-      - name: 发送 Telegram 群组通知(ReSukiSU群组)
+
+      - name: 发送 Telegram 群组通知(BakaSU群组)
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID_2 }}
@@ -609,26 +609,26 @@ jobs:
 
           TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
-          
+
           Branch: <code>${{ github.ref_name }}</code>
           Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
-          
-          Features: 
-          <pre>ReSukiSU = ${{ inputs.kernelsu_variant == 'ReSukiSU' && 'true' || 'false' }}
+
+          Features:
+          <pre>BakaSU = true
           SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
           BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
           LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
           Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
           Droidspaces = ${{ inputs.droidspaces }}${{ inputs.droidspaces_ntsync && ' + NTSync' || '' }}
           KPatch-Next Support = true</pre>
-          Change Log: 
+          Change Log:
           <pre>${INPUT_CHANGE_LOG}
           </pre>
-          
-          Download: <a href="https://t.me/ReSukiSUKernelBuilds">View In Channel</a>
 
-          Note: The "commit" here refers to ReSukiSU's commit, not this repository's.
+          Download: <a href="https://github.com/${{ github.repository }}/releases/tag/${NEW_TAG}">View In Releases</a>
+
+          Note: The "commit" here refers to BakaSU's commit, not this repository's.
           EOF
           )
 
@@ -651,26 +651,26 @@ jobs:
 
           TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
-          
+
           Branch: <code>${{ github.ref_name }}</code>
           Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
-          
-          Features: 
-          <pre>ReSukiSU = ${{ inputs.kernelsu_variant == 'ReSukiSU' && 'true' || 'false' }}
+
+          Features:
+          <pre>BakaSU = true
           SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
           BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
           LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
           Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
           Droidspaces = ${{ inputs.droidspaces }}${{ inputs.droidspaces_ntsync && ' + NTSync' || '' }}
           KPatch-Next Support = true</pre>
-          Change Log: 
+          Change Log:
           <pre>${INPUT_CHANGE_LOG}
           </pre>
-          
-          Download: <a href="https://t.me/ReSukiSUKernelBuilds">View In Channel</a>
 
-          Note: The "commit" here refers to ReSukiSU's commit, not this repository's.
+          Download: <a href="https://github.com/${{ github.repository }}/releases/tag/${NEW_TAG}">View In Releases</a>
+
+          Note: The "commit" here refers to BakaSU's commit, not this repository's.
           EOF
           )
 

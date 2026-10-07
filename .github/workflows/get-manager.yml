@@ -65,8 +65,8 @@ jobs:
       - name: 获取 KSU & SUSFS 版本
         id: get_version
         run: |
-          echo "This is the ReSukiSU variant"
-          git clone https://github.com/ReSukiSU/ReSukiSU.git KernelSU
+          echo "This is the BakaSU variant"
+          git clone https://github.com/Baka-SU/BakaSU.git KernelSU
 
           cd KernelSU
 
@@ -89,11 +89,11 @@ jobs:
         id: add_KSU
         continue-on-error: true
         run: |
-          echo "ReSukiSU..."
-          REPO="ReSukiSU/ReSukiSU"
+          echo "BakaSU..."
+          REPO="Baka-SU/BakaSU"
           KSUM="Manager"
           FILENAME="build-manager.yml"
-          
+
           # 初始化
           NUMBER=0
           DOWNLOAD_LIST=""
@@ -128,16 +128,16 @@ jobs:
               break
             fi
           done
-         
+
           if [ -z "$DOWNLOAD_LIST" ]; then
             echo "未获取到可用的 Manager artifact 下载地址列表。"
             exit 1
           fi
-          
+
           # 下载并解压所有 Manager 产物
           echo "$DOWNLOAD_LIST" | while IFS=$'\t' read -r NAME URL; do
             SAFE_NAME=$(echo "$NAME" | tr '/ ' '__')
-            ZIP_NAME="ReSukiSU-${SAFE_NAME}(${{ env.KSU_VERSION }}).zip"
+            ZIP_NAME="BakaSU-${SAFE_NAME}(${{ env.KSU_VERSION }}).zip"
             echo "下载 $NAME -> $ZIP_NAME"
             curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o "$ZIP_NAME" "$URL"
             mkdir -p "manager-artifacts/$SAFE_NAME"
@@ -193,7 +193,7 @@ jobs:
         if: steps.add_KSU.outcome == 'success'
         uses: actions/upload-artifact@v6
         with:
-          name: ReSukiSU-Manager(${{ env.KSU_VERSION }})
+          name: BakaSU-Manager(${{ env.KSU_VERSION }})
           path: |
             **/*.apk
 

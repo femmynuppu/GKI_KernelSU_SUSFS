@@ -1,59 +1,35 @@
 <div align="center">
 
 # GKI KernelSU SUSFS
-### 专为ReSukiSU打造的自动构建仓库
+### 专为 BakaSU (原 ReSukiSU) 打造的自动构建仓库
 
-**自动化构建 GKI 内核 | 集成 ReSukiSU + SUSFS**
+**自动化构建 GKI 内核 | 集成 BakaSU + SUSFS**
 
-[![Release](https://img.shields.io/github/v/release/coolzyd9107/GKI_KernelSU_SUSFS?label=Release&style=flat-square&logo=github&logoColor=white&color=2ea44f)](https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases)
-[![Telegram](https://img.shields.io/static/v1?label=Telegram&message=Channel&color=0088cc)](https://t.me/ReSukiSUKernelBuilds)
-[![ReSukiSU](https://img.shields.io/badge/ReSukiSU-Supported-5AA300?style=flat-square)](https://kernelsu.org/)
+[![Release](https://img.shields.io/github/v/release/femmynuppu/GKI_KernelSU_SUSFS?label=Release&style=flat-square&logo=github&logoColor=white&color=2ea44f)](https://github.com/femmynuppu/GKI_KernelSU_SUSFS/releases)
+[![BakaSU](https://img.shields.io/badge/BakaSU-Supported-5AA300?style=flat-square)](https://bakasu.org/)
 [![SUSFS](https://img.shields.io/badge/SUSFS-Integrated-E67E22?style=flat-square)](https://gitlab.com/simonpunk/susfs4ksu)
 
 ---
-
-# 重要公告
-### 2026高考已至，仓库作者需要参加考试，因此此仓库将归档至高考结束，见谅！同时祝其他本届考生高考顺利！
 
 </div>
 
 ## ⚠️ 仓库须知
 
-① 本仓库分叉自 [zzh20188/GKI_KernelSU_SUSFS](https://github.com/zzh20188/GKI_KernelSU_SUSFS/) 本人只进行了部分修改与问题修复，请各位使用者优先考虑分叉原始仓库。
+① 本仓库专为 [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU)（原 ReSukiSU）打造的自动化构建流，适配最新 BakaSU 内核驱动与管理端。
 
-② 本仓库仅支持构建包含ReSukiSU的内核，对其它KernelSU分支的内核构建支持现已彻底移除，如需构建包含其他KernelSU分支的内核，请分叉上游仓库 [zzh20188/GKI_KernelSU_SUSFS](https://github.com/zzh20188/GKI_KernelSU_SUSFS/) 然后自行构建。
-
-## 💰 特别鸣谢
-
-[coolzyd9107](https://github.com/coolzyd9107)：仓库的创建者和所有者，但他是一个大fèiwù，很多东西都不会。
-
-[zzh20188](https://github.com/zzh20188)：他是本仓库的上游仓库作者。
-
-[*zhuzhuzihan*](https://github.com/zhuzhuzihan)：协助进行了大量修复和修改，同时为我们的Telegram Bot提供服务器(仓库所有者真的太穷了，租不起)，我们的Telegram Bot的主要开发者。
-
-[TanakaLun](https://github.com/TanakaLun)：协助进行了大量修复和修改。
-
-[YC酱luyancib](https://github.com/luyanci): 协助开发Telegram Bot，提供部分构建工作流程修复思路和Bot开发思路。
-
-[AlexLiuDev233](https://github.com/AlexLiuDev233): 协助修复构建工作流程存在的问题。
-
-[cctv18](https://github.com/cctv18): 协助修复构建工作流程存在的问题，为添加6.12内核构建支持提供部分思路，为修复一些SUSFS导致的问题提供思路。
-
-注:带*号的username表示该协作者的github账户处于不可见状态
+② 默认变体为 **BakaSU**，原生内置 SUSFS 支持、多管理器兼容（Multi-Manager）、NoMount VFS 与 TCP BBR 优化。
 
 ---
 
 ## ⚠️ 兼容性提醒
 
-> **注意：** 目前不支持一加 ColorOS 14、15，刷入后可能需要清除数据开机。
-
-> **ReSukiSU：ReSukiSU更新比SukiSU勤快，SukiSU报错就试试ReSukiSU**
+> **BakaSU：由原 ReSukiSU 更名而来（https://github.com/Baka-SU/BakaSU），文档见 https://bakasu.org**
 >
-> **默认变体已切换为 ReSukiSU**
+> **默认变体已全面升级为 BakaSU**
 
 > **Android 16：已支持 Android 16 - 6.12 内核版本**
->
-> **自本仓库的提交#c17aae5起我们已彻底移除对除ReSukiSU以外的KernelSU变体的内核构建支持，如果你出于某种原因更喜欢使用其他KernelSU变体的管理器，你完全不必担心，我们启用了muti-manager (内核中的KernelSU驱动程序仍是ReSukiSU，但支持使用其它大部分KernelSU变体的管理器进行管理，例如KowSU和SukiSU-Ultra的管理器) ，这样你就可以直接使用其他KernelSU变体的管理器，但请务必记住，如果你要反馈问题，请使用ReSukiSU管理器提交日志信息**
+
+> **多管理器支持（Multi-Manager）：内核驱动原生支持 BakaSU、KOWSU、SukiSU-Ultra 等多种管理器**
 
 > **rekernel功能（测试）：已支持 rekernel 功能（目前处于测试阶段）**
 
