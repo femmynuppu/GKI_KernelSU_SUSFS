@@ -124,6 +124,11 @@ on:
         required: false
         type: boolean
         default: true
+      use_gkid_opts:
+        description: "Enable GKID Optimizations (Battery, Scheduler, Network, I/O Tuning)"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-custom-kernel:
@@ -150,6 +155,7 @@ jobs:
       add_zeromount: ${{ inputs.add_zeromount }}
       add_selinux_evasion: ${{ inputs.add_selinux_evasion }}
       add_nomount: ${{ inputs.add_nomount }}
+      use_gkid_opts: ${{ inputs.use_gkid_opts }}
 
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml

@@ -93,6 +93,10 @@ on:
         required: false
         type: boolean
         default: false
+      use_gkid_opts:
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-kernel:
@@ -1013,6 +1017,12 @@ jobs:
             echo "Applying Ghostlock rtmutex mitigations (CVE-2026-43499 & CVE-2026-53163)..."
             patch -p1 --forward < "$CVE_PATCH" || true
           fi
+
+      # ==================== Apply GKID Performance, Battery & Network Optimizations ====================
+      - name: Apply GKID Optimizations
+        if: inputs.use_gkid_opts
+        run: |
+          bash "${{ github.workspace }}/build-helpers/apply-gkid-optimizations.sh" "$KERNEL_ROOT/common" "$DEFCONFIG"
 
       - name: Clone Droidspaces Patches
         if: inputs.droidspaces != 'off'
