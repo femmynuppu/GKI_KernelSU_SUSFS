@@ -1611,17 +1611,124 @@ jobs:
           | **Spoofed Timestamp** | \`$TIME_STR\` |
 
           ### 🛡️ Feature & Security Subsystem Matrix
-          | Subsystem / Feature | Status | Description |
-          |---|---|---|
-          | **SUSFS** | $S_SUSFS | Kernel-level root hiding (Inline Hook v2.3.0) |
-          | **NoMount VFS** | $S_NOMOUNT | Modular VFS structure hijacking v2.1.0 in \`fs/nomount/\` |
-          | **VPNHide In-Tree** | $S_VPNHIDE | In-tree VPN interface concealment backend in \`security/vpnhide/\` |
-          | **Baseband Guard (BBG)** | $S_BBG | Anti-wipe modem partition protection |
-          | **TCP Congestion** | $S_BBR | TCP BBR congestion control algorithm |
-          | **ZRAM Compression** | $S_ZRAM | LZ4KD high-ratio memory compression |
-          | **GKID Optimizations** | $S_GKID | MGLRU force-on, F2FS GC 50ms, 1s process freezer, ARM64 memops |
-          | **Ghostlock Mitigations** | $S_GHOSTLOCK | Clean backport for CVE-2026-43499 & CVE-2026-53163 in \`rtmutex.c\` |
-          | **Droidspaces / NTSync** | $S_DROID | Container slot patch (\`$DS_MODE\`) / NTSync driver |
 
-          > 💡 **Installation:** Flash the AnyKernel3 zip via **Kernel Flasher** or custom recovery (**TWRP / OrangeFox**).
+          #### SUSFS — SukiSU/UfortSUSFS Inline Hook (v2.3.0)
+          **Status:** $S_SUSFS
+
+          Kernel-level root-hiding subsystem wired through the ReSukiSU inline-hook path
+          (\`CONFIG_KSU_SUSFS=y\` selects the SUSFS inline-hook mode of the KSU hook Kconfig
+          choice). Compiled-in, not a loadable module. Supercall magic pair
+          \`0xDEADBEEF / 0xFAFAFAFA\` gates feature commands from userspace. The following
+          hiding primitives are enabled via the defconfig block below:
+
+          | Primitive | Kconfig | Effect |
+          |---|---|---|
+          | Sus path | \`CONFIG_KSU_SUSFS_SUS_PATH\` | Hides paths from \`getname_flags\` / path resolution |
+          | Sus mount | \`CONFIG_KSU_SUSFS_SUS_MOUNT\` | Removes mount entries from \`/proc/mounts\` and statfs |
+          | Sus kstat | \`CONFIG_KSU_SUSFS_SUS_KSTAT\` | Spoofs inode metadata for targeted probes |
+          | Sus map | \`CONFIG_KSU_SUSFS_SUS_MAP\` | Filters \`/proc/<pid>/maps\` and smaps lines |
+          | Spoof uname | \`CONFIG_KSU_SUSFS_SPOOF_UNAME\` | Runtime \`uname -r/-v\` spoof via supercall |
+          | Spoof cmdline | \`CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG\` | Hides kernel cmdline / bootconfig from readers |
+          | Open redirect | \`CONFIG_KSU_SUSFS_OPEN_REDIRECT\` | Redirects open() on hidden targets |
+          | Symbol hiding | \`CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS\` | Strips SUSFS/KSU symbols from kallsyms |
+          | Audit log | \`CONFIG_KSU_SUSFS_ENABLE_LOG\` | Optional verbose diagnostic channel |
+
+          Source: \`gitlab.com/simonpunk/susfs4ksu\` branch \`gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}\`, commit pinned to v2.3.0.
+
+          #### NoMount VFS — Modular Mountless Redirection (v2.1.0)
+          **Status:** $S_NOMOUNT
+
+          Self-contained driver under \`fs/nomount/\` that hijacks VFS operation tables
+          (\`i_op\`, \`f_op\`, \`s_op\`, \`d_op\`) at structure level rather than patching core
+          VFS functions. Eliminates intrusive patches to \`fs/d_path.c\`, \`fs/namei.c\`,
+          \`fs/open.c\`, \`fs/proc/\`, \`fs/statfs.c\`, \`fs/xattr.c\`. Rule injection via the
+          Linux Keyring API (\`add_key()\` syscall), gated behind a static key — inert until
+          a rule is loaded. Coexists with SUSFS; overlap functions (\`show_map_vma\`,
+          \`vfs_statfs\`, \`vfs_getattr\`, \`iterate_dir\`) resolve last-writer-wins inline C.
+
+          #### VPNHide — In-Tree VPN Interface Concealment
+          **Status:** $S_VPNHIDE
+
+          Built-in backend in \`security/vpnhide/\` (\`CONFIG_VPNHIDE=y\`,
+          \`CONFIG_VPNHIDE_FS_HIDING=y\`). Thirteen kernel call-site patches across networking
+          and filesystem code hide VPN interfaces, route tables, socket binds, and procfs
+          entries without kprobe overhead or runtime memory injection:
+
+          | File | Hooked call site |
+          |---|---|
+          | \`net/core/dev_ioctl.c\` | \`dev_ifsioc\` ifname/dev lookup |
+          | \`net/core/rtnetlink.c\` | rtnetlink dev dump |
+          | \`net/core/fib_rules.c\` | fib rule hide |
+          | \`net/socket.c\` | \`setsockopt\` bind concealment |
+          | \`net/ipv4/devinet.c\` | inet ifname/dev lookup |
+          | \`net/ipv4/fib_trie.c\` | fib route hide |
+          | \`net/ipv4/fib_semantics.c\` | fib dump hide |
+          | \`net/ipv6/addrconf.c\` | addrconf dev hide |
+          | \`net/ipv6/ip6_fib.c\` | fib6 route hide |
+          | \`net/ipv6/route.c\` | rt6 hide |
+          | \`fs/namei.c\` | path lookup dentry hide |
+          | \`fs/stat.c\` | stat dentry hide |
+          | \`fs/readdir.c\` | directory listing filter |
+
+          Verification gate derives expected hook-symbol counts directly from the patch
+          files and fails the build if any call site is left unpatched.
+
+          #### TCP BBR — Built-in Congestion Control
+          **Status:** $S_BBR
+
+          In-tree BBRv1 stack (\`CONFIG_TCP_CONG_BBR=y\`, \`CONFIG_DEFAULT_BBR=y\`,
+          \`CONFIG_DEFAULT_TCP_CONG="bbr"\`, \`CONFIG_NET_SCH_FQ=y\`). Built-in, not modular.
+          BBRv3 is intentionally not backported — it depends on the EDT API
+          (\`skb_set_delivery_time\`, Linux 5.18+) and alters \`struct tcp_sock\` /
+          \`struct sk_buff\` in ways that break the MediaTek MT6895 vendor Wi-Fi driver kABI.
+
+          #### ZRAM — LZ4KD Enhanced Compression
+          **Status:** $S_ZRAM
+
+          \`CONFIG_ZRAM=y\` + \`CONFIG_ZSMALLOC=y\` switched to built-in, with the LZ4KD
+          compressor (\`CONFIG_ZRAM_DEF_COMP_LZ4KD=y\`, \`CONFIG_CRYPTO_LZO=y\`) and the
+          OPLUS LZ4K patch stack applied from \`SukiSU_patch/other/zram/zram_patch/${{ inputs.kernel_version }}/\`.
+          On android14/15 the zram/zsmalloc module declarations are stripped from
+          \`modules.bzl\` so the Kleaf module list stays consistent.
+
+          #### GKID Performance & Network Suite
+          **Status:** $S_GKID
+
+          Applies the GKID-Kernels patchset where the kernel baseline accepts it, plus a
+          defconfig block for I/O, scheduler, and netfilter hardening. Patches that do not
+          apply cleanly on this baseline are skipped and reported in the log as
+          \`GKID SKIP LIST\` — they are tolerated, not fatal.
+
+          - **I/O / filesystem:** \`CONFIG_FRAME_WARN=0\`, \`CONFIG_MQ_IOSCHED_DEADLINE=y\`,
+            \`CONFIG_F2FS_FS_XATTR=y\`, \`CONFIG_F2FS_FS_POSIX_ACL=y\`,
+            \`CONFIG_F2FS_FS_COMPRESSION=y\`.
+          - **Netfilter / ipset:** full \`CONFIG_IP_SET\` family (bitmap, hash_ip,
+            hash_ipport, hash_net, hash_netport, list_set, etc.) plus
+            \`CONFIG_IP_NF_TARGET_TTL\`, \`CONFIG_IP6_NF_NAT\`,
+            \`CONFIG_IP6_NF_TARGET_MASQUERADE\`, \`CONFIG_NETFILTER_XT_MATCH_ADDRTYPE\`,
+            \`CONFIG_NETFILTER_XT_SET\`.
+
+          #### Ghostlock Mitigations
+          **Status:** $S_GHOSTLOCK
+
+          Backport of the rtmutex fixes for CVE-2026-43499 and CVE-2026-53163, applied to
+          \`kernel/locking/rtmutex.c\` via \`patches/cve_2026_43499_rtmutex.patch\`. Closes
+          the priority-inversion / lock-handoff window the CVEs describe.
+
+          #### Baseband Guard (BBG)
+          **Status:** $S_BBG
+
+          \`CONFIG_BBG=y\` from \`vc-teahouse/Baseband-guard\`. Denies format/wipe access to
+          the modem (EFS) partition from userspace, preventing accidental or malicious
+          baseband wipes that brick the radio. Build-time compat shims (\`flask.h\`
+          generation, \`file_ioctl_compat\`, \`selinux_state\`) are detected and applied
+          automatically for the target kernel version.
+
+          #### Droidspaces / NTSync
+          **Status:** \`$DS_MODE\` / $S_NTSYNC
+
+          Droidspaces container slot patch (\`$DS_MODE\`) and the NTSync driver. Disabled
+          here means no sysvipc kabi patch and no NTSync config is injected.
+
+          > 💡 **Installation:** Flash the AnyKernel3 zip via **Kernel Flasher** or custom recovery (**TWRP / OrangeFox**). The AnyKernel3 script enforces GKI version matching (\`5.10 / 5.15 / 6.1 / 6.6 / 6.12\`) and aborts on non-GKI devices.
           EOF
