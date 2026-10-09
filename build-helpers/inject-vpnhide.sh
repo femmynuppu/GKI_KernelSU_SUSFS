@@ -9,6 +9,7 @@ KERNEL_DIR="${1:?usage: inject-vpnhide.sh <kernel_root> <kmi> <defconfig_path>}"
 KMI="${2:?usage: inject-vpnhide.sh <kernel_root> <kmi> <defconfig_path>}"
 DEFCONFIG="${3:?usage: inject-vpnhide.sh <kernel_root> <kmi> <defconfig_path>}"
 SRC_DIR="$(cd "$(dirname "$0")/../src/vpnhide" && pwd)"
+PATCH_DIR="$SRC_DIR/builtin/versions/$KMI"
 
 echo "=== Injecting VPNHide In-Tree Backend ==="
 echo "Kernel Directory: $KERNEL_DIR"
@@ -69,7 +70,6 @@ if [ "$applied_via_script" = false ]; then
     fi
 
     # 4. Apply version patches
-    PATCH_DIR="$SRC_DIR/builtin/versions/$KMI"
     if [ -d "$PATCH_DIR" ]; then
         echo "  [>] Applying call-site patches from $PATCH_DIR..."
         for p in "$PATCH_DIR"/*.patch; do
@@ -84,31 +84,43 @@ if [ "$applied_via_script" = false ]; then
     fi
 fi
 
-# 5. Verify call-site coverage (fail loudly instead of shipping a partially patched kernel)
+# 5. Verify call-site coverage (self-adapting: expectations come from the patch files)
+#    Fails loudly instead of shipping a partially patched (falsely "hidden") kernel.
 echo "=== Verifying VPNHide call-site coverage ==="
+if [ ! -d "$PATCH_DIR" ]; then
+    echo "::error::VPNHide: no patch set for KMI $KMI at $PATCH_DIR"
+    exit 1
+fi
+
 verify_fail=0
-count_sym() {
-    c=$(grep -c "$1" "$2" 2>/dev/null || true)
-    if [ "$c" -lt "$3" ]; then
-        echo "::error::VPNHide: $2 is missing $1 (found $c, need $3) — call-site not patched"
+verified_files=0
+for p in "$PATCH_DIR"/*.patch; do
+    [ -f "$p" ] || continue
+    pname=$(basename "$p")
+    target=$(sed -n 's|^+++ b/||p' "$p" | head -n 1)
+    if [ -z "$target" ]; then
+        echo "::error::VPNHide: no target path header in $pname"
+        verify_fail=1
+        continue
+    fi
+    if [ ! -f "$target" ]; then
+        echo "::error::VPNHide: patched file missing: $target (from $pname)"
+        verify_fail=1
+        continue
+    fi
+    expected=$(grep '^+' "$p" | grep -v '^+++' | grep -oE 'vpnhide_[a-z0-9_]+' | wc -l | tr -d ' ')
+    actual=$(grep -oE 'vpnhide_[a-z0-9_]+' "$target" | wc -l | tr -d ' ')
+    if [ "$actual" -lt "$expected" ]; then
+        echo "::error::VPNHide: $target has $actual vpnhide_ references, expected >= $expected from $pname — call-site not patched"
         verify_fail=1
     fi
-}
-count_sym vpnhide_should_hide_ifname net/core/dev_ioctl.c 3
-count_sym vpnhide_should_hide_dev    net/core/dev_ioctl.c 1
-count_sym vpnhide_should_hide_dev    net/core/rtnetlink.c 1
-count_sym vpnhide_should_hide_dev    net/ipv4/devinet.c 1
-count_sym vpnhide_should_hide_ifname net/ipv4/devinet.c 1
-count_sym vpnhide_should_hide_dev    net/ipv6/addrconf.c 1
-count_sym vpnhide_setsockopt_bind    net/socket.c 1
-count_sym vpnhide_hide_fib_route     net/ipv4/fib_trie.c 1
-count_sym vpnhide_hide_fib6_route    net/ipv6/ip6_fib.c 1
-count_sym vpnhide_hide_fib_dump      net/ipv4/fib_semantics.c 1
-count_sym vpnhide_hide_rt6           net/ipv6/route.c 1
-count_sym vpnhide_hide_fib_rule      net/core/fib_rules.c 1
-count_sym vpnhide_should_hide_dentry fs/namei.c 2
-count_sym vpnhide_should_hide_dentry fs/stat.c 1
-count_sym vpnhide_readdir_begin      fs/readdir.c 1
+    verified_files=$((verified_files + 1))
+done
+
+if [ "$verified_files" -eq 0 ]; then
+    echo "::error::VPNHide: no .patch files found in $PATCH_DIR"
+    verify_fail=1
+fi
 
 if [ -n "$(find . -maxdepth 6 \( -path ./out -o -path ./bazel-\* \) -prune -o -type f -name '*.rej' -print 2>/dev/null | head -n 1)" ]; then
     echo "::error::VPNHide: leftover .rej files detected — some hunks were rejected"
@@ -120,7 +132,7 @@ if [ "$verify_fail" -ne 0 ]; then
     echo "::error::VPNHide verification failed — refusing to build a partially hidden kernel"
     exit 1
 fi
-echo "✓ All 13 call-site files carry the required VPNHide hooks"
+echo "✓ All $verified_files call-site files carry the required VPNHide hooks"
 
 # 6. Inject defconfig
 echo "=== Configuring VPNHide in defconfig ==="
