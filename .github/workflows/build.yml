@@ -167,6 +167,40 @@ jobs:
           | **Ghostlock Fix** | ✅ ENABLED | CVE-2026-43499 & CVE-2026-53163 in \`rtmutex.c\` |
           EOF
 
+      # ==================== Sanitize Free-Text Inputs ====================
+      # Reject newline / carriage-return / null in free-text inputs before they flow
+      # into $GITHUB_ENV writes or sed/perl interpolations. A newline in build_time,
+      # version, ksu_branch, or sub_level would inject a second KEY=VALUE line into
+      # $GITHUB_ENV (env var injection bypassing workflow-file branch protection)
+      # or break sed/perl delimiter blocks. Choice/boolean inputs are not affected.
+      - name: Sanitize Free-Text Inputs
+        env:
+          IN_BUILD_TIME: ${{ inputs.build_time }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_KSU_BRANCH: ${{ inputs.ksu_branch }}
+          IN_SUB_LEVEL: ${{ inputs.sub_level }}
+          IN_OS_PATCH_LEVEL: ${{ inputs.os_patch_level }}
+          IN_REVISION: ${{ inputs.revision }}
+        run: |
+          set -eu
+          fail=0
+          check() {
+            local name="$1" raw="$2"
+            case "$raw" in
+              *$'\n'*|*$'\r'*|*$'\0'*)
+                echo "::error::input '$name' contains a newline / CR / NUL — rejected to prevent GITHUB_ENV injection"
+                fail=1
+                ;;
+            esac
+          }
+          check build_time "$IN_BUILD_TIME"
+          check version "$IN_VERSION"
+          check ksu_branch "$IN_KSU_BRANCH"
+          check sub_level "$IN_SUB_LEVEL"
+          check os_patch_level "$IN_OS_PATCH_LEVEL"
+          check revision "$IN_REVISION"
+          [ "$fail" -eq 0 ] || exit 1
+
       # ==================== Clean Disk Space ====================
       - name: Clean Disk Space
         uses: endersonmenezes/free-disk-space@v3
@@ -1212,15 +1246,10 @@ jobs:
           CONFIG_TMPFS_POSIX_ACL=y
           EOF
 
-          if [ "${{ inputs.ksu_variant }}" == "SukiSU" ] || [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ] || [ "${{ inputs.ksu_variant }}" == "BakaSU" ] || [ "${{ inputs.ksu_variant }}" == "Next" ]; then
-            if [[ "${{ inputs.use_kpm }}" == enabled* ]] || [[ "${{ inputs.use_kpm }}" == patched* ]]; then
-              if ! grep -RqsE '^[[:space:]]*config[[:space:]]+KPM([[:space:]]|$)' common KernelSU 2>/dev/null; then
-                echo "Error: KPM requested but current KernelSU code does not declare CONFIG_KPM" >&2
-                exit 1
-              fi
-              echo "CONFIG_KPM=y" >> "$DEFCONFIG"
-            fi
-          fi
+          # KPM: previously gated on inputs.use_kpm, which was never declared as a
+          # workflow_call input — the branch was dead code (always false) and would
+          # have silently never enabled CONFIG_KPM. Removed to avoid confusion.
+          # To enable KPM, add a real `use_kpm` input and restore the gate here.
 
           CURRENT_SUB="${{ inputs.sub_level }}"
           if [[ ! "$CURRENT_SUB" =~ ^[0-9]+$ ]]; then
