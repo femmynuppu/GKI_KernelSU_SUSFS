@@ -84,7 +84,45 @@ if [ "$applied_via_script" = false ]; then
     fi
 fi
 
-# 5. Inject defconfig
+# 5. Verify call-site coverage (fail loudly instead of shipping a partially patched kernel)
+echo "=== Verifying VPNHide call-site coverage ==="
+verify_fail=0
+count_sym() {
+    c=$(grep -c "$1" "$2" 2>/dev/null || true)
+    if [ "$c" -lt "$3" ]; then
+        echo "::error::VPNHide: $2 is missing $1 (found $c, need $3) — call-site not patched"
+        verify_fail=1
+    fi
+}
+count_sym vpnhide_should_hide_ifname net/core/dev_ioctl.c 3
+count_sym vpnhide_should_hide_dev    net/core/dev_ioctl.c 1
+count_sym vpnhide_should_hide_dev    net/core/rtnetlink.c 1
+count_sym vpnhide_should_hide_dev    net/ipv4/devinet.c 1
+count_sym vpnhide_should_hide_ifname net/ipv4/devinet.c 1
+count_sym vpnhide_should_hide_dev    net/ipv6/addrconf.c 1
+count_sym vpnhide_setsockopt_bind    net/socket.c 1
+count_sym vpnhide_hide_fib_route     net/ipv4/fib_trie.c 1
+count_sym vpnhide_hide_fib6_route    net/ipv6/ip6_fib.c 1
+count_sym vpnhide_hide_fib_dump      net/ipv4/fib_semantics.c 1
+count_sym vpnhide_hide_rt6           net/ipv6/route.c 1
+count_sym vpnhide_hide_fib_rule      net/core/fib_rules.c 1
+count_sym vpnhide_should_hide_dentry fs/namei.c 2
+count_sym vpnhide_should_hide_dentry fs/stat.c 1
+count_sym vpnhide_readdir_begin      fs/readdir.c 1
+
+if [ -n "$(find . -maxdepth 6 \( -path ./out -o -path ./bazel-\* \) -prune -o -type f -name '*.rej' -print 2>/dev/null | head -n 1)" ]; then
+    echo "::error::VPNHide: leftover .rej files detected — some hunks were rejected"
+    find . -maxdepth 6 \( -path ./out -o -path ./bazel-\* \) -prune -o -type f -name '*.rej' -print 2>/dev/null | head -n 10
+    verify_fail=1
+fi
+
+if [ "$verify_fail" -ne 0 ]; then
+    echo "::error::VPNHide verification failed — refusing to build a partially hidden kernel"
+    exit 1
+fi
+echo "✓ All 13 call-site files carry the required VPNHide hooks"
+
+# 6. Inject defconfig
 echo "=== Configuring VPNHide in defconfig ==="
 grep -q '^CONFIG_VPNHIDE=y$' "$DEFCONFIG" || echo "CONFIG_VPNHIDE=y" >> "$DEFCONFIG"
 grep -q '^CONFIG_VPNHIDE_FS_HIDING=y$' "$DEFCONFIG" || echo "CONFIG_VPNHIDE_FS_HIDING=y" >> "$DEFCONFIG"

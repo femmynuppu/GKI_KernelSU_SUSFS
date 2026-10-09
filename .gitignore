@@ -34,6 +34,7 @@ desktop.ini
 
 # Kernel build artifacts
 out/
+artifacts/
 Image
 Image.gz
 Image.lz4
