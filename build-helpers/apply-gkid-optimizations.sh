@@ -20,6 +20,11 @@ applied_count=0
 skipped_count=0
 skipped_list=""
 
+# Snapshot existing .rej files so the warning below only reports NEW rejects
+# from THIS step (SUSFS/Ghostlock/unicode patches run earlier and their
+# tolerated rejects must not be misattributed to GKID).
+REJ_BEFORE=$(find . -maxdepth 4 -type f -name '*.rej' 2>/dev/null | sort)
+
 # 1. Apply common optimization patches
 if [ -d "$PATCH_DIR" ]; then
     for patch_file in "$PATCH_DIR"/*.patch; do
@@ -61,9 +66,11 @@ if [ -n "$skipped_list" ]; then
     echo "::warning::GKID patches not present in this kernel build (not supported on this kernel baseline or context drift):$skipped_list"
     echo "GKID SKIP LIST:$skipped_list"
 fi
-if find . -maxdepth 4 -type f -name '*.rej' 2>/dev/null | head -n 1 | grep -q .; then
-    echo "::warning::GKID left .rej files behind — inspect before trusting the build:"
-    find . -maxdepth 4 -type f -name '*.rej' 2>/dev/null | head -n 10
+REJ_AFTER=$(find . -maxdepth 4 -type f -name '*.rej' 2>/dev/null | sort)
+REJ_NEW=$(comm -13 <(printf '%s\n' "$REJ_BEFORE") <(printf '%s\n' "$REJ_AFTER") 2>/dev/null || true)
+if [ -n "$REJ_NEW" ]; then
+    echo "::warning::GKID left NEW .rej files behind — inspect before trusting the build:"
+    printf '%s\n' "$REJ_NEW" | head -n 10
 fi
 
 # 3. Apply GKID Performance & Network Kernel Configs
