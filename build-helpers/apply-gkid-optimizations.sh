@@ -18,6 +18,7 @@ cd "$KERNEL_DIR"
 
 applied_count=0
 skipped_count=0
+skipped_list=""
 
 # 1. Apply common optimization patches
 if [ -d "$PATCH_DIR" ]; then
@@ -33,10 +34,12 @@ if [ -d "$PATCH_DIR" ]; then
             else
                 echo "  [-] Failed to apply: $patch_name (reverted)"
                 skipped_count=$((skipped_count + 1))
+                skipped_list="$skipped_list $patch_name"
             fi
         else
             echo "  [-] Skipped: $patch_name (context mismatch or already present)"
             skipped_count=$((skipped_count + 1))
+            skipped_list="$skipped_list $patch_name"
         fi
     done
 
@@ -54,6 +57,14 @@ if [ -d "$PATCH_DIR" ]; then
 fi
 
 echo "Summary: $applied_count applied, $skipped_count skipped."
+if [ -n "$skipped_list" ]; then
+    echo "::warning::GKID patches not present in this kernel build (not supported on this kernel baseline or context drift):$skipped_list"
+    echo "GKID SKIP LIST:$skipped_list"
+fi
+if find . -maxdepth 4 -type f -name '*.rej' 2>/dev/null | head -n 1 | grep -q .; then
+    echo "::warning::GKID left .rej files behind — inspect before trusting the build:"
+    find . -maxdepth 4 -type f -name '*.rej' 2>/dev/null | head -n 10
+fi
 
 # 3. Apply GKID Performance & Network Kernel Configs
 echo "=== Injecting GKID Performance & Network Configs ==="
