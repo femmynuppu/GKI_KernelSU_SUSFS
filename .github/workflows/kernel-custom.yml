@@ -124,6 +124,16 @@ on:
         required: false
         type: boolean
         default: true
+      use_bbr:
+        description: "Enable TCP BBR (Default Congestion Control)"
+        required: false
+        type: boolean
+        default: true
+      add_ghostlock:
+        description: "Apply Ghostlock Mitigations (CVE-2026-43499 & CVE-2026-53163)"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-custom-kernel:
@@ -150,6 +160,8 @@ jobs:
       add_nomount: ${{ inputs.add_nomount }}
       add_vpnhide: ${{ inputs.add_vpnhide }}
       use_gkid_opts: ${{ inputs.use_gkid_opts }}
+      use_bbr: ${{ inputs.use_bbr }}
+      add_ghostlock: ${{ inputs.add_ghostlock }}
 
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml
