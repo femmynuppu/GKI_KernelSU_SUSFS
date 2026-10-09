@@ -119,6 +119,11 @@ on:
         required: false
         type: boolean
         default: true
+      add_vpnhide:
+        description: "Enable VPNHide In-Tree Backend (VPN Interface Concealment)"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-custom-kernel:
@@ -143,6 +148,7 @@ jobs:
       droidspaces: ${{ inputs.droidspaces || 'off' }}
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync || false }}
       add_nomount: ${{ inputs.add_nomount }}
+      add_vpnhide: ${{ inputs.add_vpnhide }}
       use_gkid_opts: ${{ inputs.use_gkid_opts }}
 
   get-ksu-manager:

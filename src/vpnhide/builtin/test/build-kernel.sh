@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Build a QEMU-bootable GKI kernel with the vpnhide built-in backend baked in
+# for <kmi>, into the per-KMI cache so run.sh can boot it. Unlike
+# kmod/test/build-kernel.sh there is NO module: builtin/scripts/integrate.py is
+# applied to the source tree and CONFIG_VPNHIDE=y is merged, so the driver ends
+# up compiled into the Image.
+#
+# Usage:  builtin/test/build-kernel.sh <kmi>          e.g. android14-6.1
+# Output: builtin/test/.cache/<kmi>/Image
+set -euo pipefail
+
+KMI="${1:?usage: build-kernel.sh <kmi>  (e.g. android14-6.1)}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/../.." && pwd)"
+CACHE="$HERE/.cache/$KMI"
+FRAG="$REPO/kmod/test/qemu.config"        # reuse the proven QEMU boot fragment
+TRIM="$REPO/kmod/test/qemu-trim.config"   # …and the same subsystem trim
+
+DDK_IMAGE_TAG="20260313"
+DDK="${VPNHIDE_DDK_IMAGE:-ghcr.io/ylarod/ddk-min:${KMI}-${DDK_IMAGE_TAG}}"
+
+CONTAINER_CMD="${VPNHIDE_CONTAINER_RUNTIME:-}"
+if [ -z "$CONTAINER_CMD" ]; then
+	if command -v podman >/dev/null 2>&1; then CONTAINER_CMD="podman"
+	elif command -v docker >/dev/null 2>&1; then CONTAINER_CMD="docker"
+	else echo "ERROR: neither podman nor docker found"; exit 1; fi
+fi
+
+mkdir -p "$CACHE"
+echo "[build-kernel/builtin] $KMI: cloning kernel/common + baking CONFIG_VPNHIDE + building Image (slow)…"
+
+# SC2016: the single-quoted body runs INSIDE the container; $KMI reaches it via
+# `-e KMI`, the rest expand in the container shell — intentionally not expanded
+# here. kmod/test/build-kernel.sh dodges the warning by hardcoding `docker` (the
+# linter then parses the -c body as nested shell); the dynamic runtime name here
+# defeats that, so disable it explicitly.
+# shellcheck disable=SC2016
+"$CONTAINER_CMD" run --rm \
+	-v "$(command -v uv):/usr/local/bin/uv:ro" -v "$REPO:/repo:ro" -v "$CACHE:/out" -v "$FRAG:/qemu.config:ro" \
+	-v "$TRIM:/qemu-trim.config:ro" \
+	-e KMI="$KMI" "$DDK" bash -euo pipefail -c '
+	CLANG_BIN="$(ls -d /opt/ddk/clang/*/bin | head -1)"
+	export PATH="$CLANG_BIN:$PATH"
+
+	git clone --depth=1 -b "$KMI" \
+		https://android.googlesource.com/kernel/common /tmp/linux
+
+	# Bake the built-in backend into the source tree.
+	uv run --python 3.12 /repo/builtin/scripts/integrate.py apply --kernel /tmp/linux --kmi "$KMI" --output /out/review-$(date +%s)
+
+	# Work around an AOSP host-tool regression on some GKI HEADs (e.g.
+	# android15-6.6 @ 57c281246): certs/extract-cert.c declares key_pass only
+	# under USE_PKCS11_ENGINE but references it in the non-BoringSSL ENGINE
+	# branch, so the host tool fails to build with real OpenSSL and no PKCS#11.
+	# Unrelated to vpnhide; make the declaration unconditional so certs/ builds.
+	sed -i -z "s/#ifdef USE_PKCS11_ENGINE\nstatic const char \*key_pass;\n#endif/static const char *key_pass;/" \
+		/tmp/linux/certs/extract-cert.c || true
+
+	cd /tmp/linux
+	make ARCH=arm64 LLVM=1 gki_defconfig
+	cp /qemu.config /tmp/frag.config
+	printf "CONFIG_VPNHIDE=y\nCONFIG_VPNHIDE_FS_HIDING=y\n" >> /tmp/frag.config
+	./scripts/kconfig/merge_config.sh -m .config /tmp/frag.config /qemu-trim.config
+	make ARCH=arm64 LLVM=1 olddefconfig
+	grep -E "CONFIG_VPNHIDE(_FS_HIDING)?=" .config
+	make ARCH=arm64 LLVM=1 -j"$(nproc)" Image
+	cp arch/arm64/boot/Image /out/Image
+'
+
+echo "[build-kernel/builtin] $KMI: done"
+echo "  Image: $CACHE/Image"

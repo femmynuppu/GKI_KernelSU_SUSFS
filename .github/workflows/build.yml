@@ -85,6 +85,10 @@ on:
         required: false
         type: boolean
         default: true
+      add_vpnhide:
+        required: false
+        type: boolean
+        default: true
       use_gkid_opts:
         required: false
         type: boolean
@@ -124,8 +128,36 @@ jobs:
           echo "Droidspaces      : ${{ inputs.droidspaces }}"
           echo "NTSync           : ${{ inputs.droidspaces_ntsync }}"
           echo "NoMount VFS      : ${{ inputs.add_nomount }}"
+          echo "VPNHide In-Tree  : ${{ inputs.add_vpnhide }}"
+          echo "GKID Opts        : ${{ inputs.use_gkid_opts }}"
           echo "Stock Defconfig  : Auto-detect config/stock_defconfig"
           echo "========================================"
+
+          cat << EOF | sed 's/^[[:space:]]*//' >> "$GITHUB_STEP_SUMMARY"
+          # 🚀 GKI Kernel Build (In Progress)
+
+          ### 📦 Target Configuration
+          | Attribute | Value |
+          |---|---|
+          | **Android Version** | \`${{ inputs.android_version }}\` |
+          | **Kernel Base** | \`Linux ${{ inputs.kernel_version }}.${{ inputs.sub_level }} (${{ inputs.os_patch_level }})\` |
+          | **Root Provider** | **${{ inputs.ksu_variant }}** (\`${{ inputs.ksu_branch || 'default' }}\`) |
+          | **Spoofed Release** | \`${{ inputs.version || 'Stock GKI Release' }}\` |
+          | **Spoofed Timestamp** | \`${{ inputs.build_time || 'Current UTC' }}\` |
+
+          ### 🛡️ Subsystem Configuration
+          | Subsystem | Status | Description |
+          |---|---|---|
+          | **BakaSU Core** | ✅ ENABLED | Kernel-space root provider |
+          | **SUSFS** | ${{ inputs.enable_susfs && '✅ ENABLED (v2.3.0)' || '❌ DISABLED' }} | Kernel root hiding (Inline hook) |
+          | **NoMount VFS** | ${{ inputs.add_nomount && '✅ ENABLED (v2.1.0)' || '❌ DISABLED' }} | Mountless path redirection di \`fs/nomount/\` |
+          | **VPNHide In-Tree** | ${{ inputs.add_vpnhide && '✅ ENABLED' || '❌ DISABLED' }} | VPN interface concealment di \`security/vpnhide/\` |
+          | **TCP Congestion** | ✅ ENABLED (BBR) | Default congestion control algorithm |
+          | **ZRAM Engine** | ${{ inputs.use_zram && '✅ ENABLED (LZ4KD)' || '❌ DISABLED' }} | High-speed memory compression |
+          | **GKID Optimizations** | ${{ inputs.use_gkid_opts && '✅ ENABLED' || '❌ DISABLED' }} | Fast freezer, F2FS GC 50ms, ARM64 memops |
+          | **Baseband Guard** | ${{ inputs.use_bbg && '✅ ENABLED' || '❌ DISABLED' }} | Anti-wipe modem partition protection |
+          | **Ghostlock Fix** | ✅ ENABLED | CVE-2026-43499 & CVE-2026-53163 in \`rtmutex.c\` |
+          EOF
 
       # ==================== Clean Disk Space ====================
       - name: Clean Disk Space
@@ -762,6 +794,13 @@ jobs:
             echo "Applying Ghostlock rtmutex mitigations (CVE-2026-43499 & CVE-2026-53163)..."
             patch -p1 --forward < "$CVE_PATCH" || true
           fi
+
+      # ==================== Inject VPNHide In-Tree Backend ====================
+      - name: Inject VPNHide Hooks
+        if: inputs.add_vpnhide
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          bash "${{ github.workspace }}/build-helpers/inject-vpnhide.sh" "$PWD" "${{ inputs.android_version }}-${{ inputs.kernel_version }}" "$DEFCONFIG"
 
       # ==================== Apply GKID Performance, Battery & Network Optimizations ====================
       - name: Apply GKID Optimizations
@@ -1485,6 +1524,7 @@ jobs:
 
           [ "${{ inputs.enable_susfs }}" = "true" ] && S_SUSFS="✅ ACTIVE (Inline Hook v2.3.0)" || S_SUSFS="❌ DISABLED"
           [ "${{ inputs.add_nomount }}" = "true" ] && S_NOMOUNT="✅ ACTIVE (Modular v2.1.0 fs/nomount/)" || S_NOMOUNT="❌ DISABLED"
+          [ "${{ inputs.add_vpnhide }}" = "true" ] && S_VPNHIDE="✅ ACTIVE (In-Tree Call-Site Hooks)" || S_VPNHIDE="❌ DISABLED"
           [ "${{ inputs.use_bbg }}" = "true" ] && S_BBG="✅ ACTIVE (Anti-Wipe Protection)" || S_BBG="❌ DISABLED"
           [ "${{ inputs.use_zram }}" = "true" ] && S_ZRAM="✅ ACTIVE (LZ4KD Enhanced)" || S_ZRAM="❌ DISABLED"
           [ "${{ inputs.use_gkid_opts }}" = "true" ] && S_GKID="✅ ACTIVE (MGLRU, F2FS GC 50ms, 1s Freezer, ARM64 Memops)" || S_GKID="❌ DISABLED"
@@ -1510,6 +1550,7 @@ jobs:
           echo "  ACTIVE SUBSYSTEMS & ROOT-HIDING MATRIX:"
           printf "  • SUSFS Root Hiding      : %s\n" "$S_SUSFS"
           printf "  • NoMount VFS            : %s\n" "$S_NOMOUNT"
+          printf "  • VPNHide In-Tree        : %s\n" "$S_VPNHIDE"
           printf "  • Baseband Guard (BBG)   : %s\n" "$S_BBG"
           printf "  • TCP Congestion Control : ✅ ACTIVE (BBR Default)\n"
           printf "  • ZRAM Memory Engine     : %s\n" "$S_ZRAM"
@@ -1543,6 +1584,7 @@ jobs:
           |---|---|---|
           | **SUSFS** | $S_SUSFS | Kernel-level root hiding (Inline Hook v2.3.0) |
           | **NoMount VFS** | $S_NOMOUNT | Modular VFS structure hijacking v2.1.0 in \`fs/nomount/\` |
+          | **VPNHide In-Tree** | $S_VPNHIDE | In-tree VPN interface concealment backend in \`security/vpnhide/\` |
           | **Baseband Guard (BBG)** | $S_BBG | Anti-wipe modem partition protection |
           | **TCP Congestion** | ✅ ACTIVE | TCP BBR (Default Congestion Control) |
           | **ZRAM Compression** | $S_ZRAM | LZ4KD high-ratio memory compression |
