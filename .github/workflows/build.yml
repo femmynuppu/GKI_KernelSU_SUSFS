@@ -184,14 +184,14 @@ jobs:
         run: |
           set -eu
           fail=0
+          nl=$'\n'
+          cr=$'\r'
           check() {
             local name="$1" raw="$2"
-            case "$raw" in
-              *$'\n'*|*$'\r'*|*$'\0'*)
-                echo "::error::input '$name' contains a newline / CR / NUL — rejected to prevent GITHUB_ENV injection"
-                fail=1
-                ;;
-            esac
+            if [[ "$raw" == *"$nl"* ]] || [[ "$raw" == *"$cr"* ]]; then
+              echo "::error::input '$name' contains a newline / CR / NUL — rejected to prevent GITHUB_ENV injection"
+              fail=1
+            fi
           }
           check build_time "$IN_BUILD_TIME"
           check version "$IN_VERSION"
