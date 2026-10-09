@@ -130,11 +130,14 @@ if [ -f "$SETUID" ]; then
     if [ "$DUPS" -gt 1 ]; then
         echo "fix-susfs-compat: removing duplicate ksu_handle_setresuid (6.8+ MANUAL_HOOK block)"
         python3 - "$SETUID" << 'PYEOF'
-import sys
+import sys, re
 path = sys.argv[1]
 with open(path) as f:
     lines = f.readlines()
-start = next((i for i, l in enumerate(lines) if 'KERNEL_VERSION(6, 8, 0)' in l), None)
+# Anchor to a preprocessor #if line (not a comment / #endif trailing text) and
+# tolerate whitespace variants: KERNEL_VERSION(6, 8, 0) or KERNEL_VERSION(6,8,0).
+kv = re.compile(r'^\s*#\s*if.*KERNEL_VERSION\s*\(\s*6\s*,\s*8\s*,\s*0\s*\)')
+start = next((i for i, l in enumerate(lines) if kv.search(l)), None)
 if start is not None:
     depth, end = 0, None
     for i in range(start, len(lines)):
