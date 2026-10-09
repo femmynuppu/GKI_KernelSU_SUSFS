@@ -114,17 +114,18 @@ for p in "$PATCH_DIR"/*.patch; do
         echo "::error::VPNHide: $target has $actual vpnhide_ references, expected >= $expected from $pname — call-site not patched"
         verify_fail=1
     fi
+    # Scope the .rej check to THIS file only. A global .rej scan would also catch
+    # rejected hunks from SUSFS/Ghostlock/unicode patches, which the pipeline
+    # deliberately tolerates with `|| true` — that must not hard-fail this step.
+    if [ -f "$target.rej" ]; then
+        echo "::error::VPNHide: rejected hunks in $target (see $target.rej)"
+        verify_fail=1
+    fi
     verified_files=$((verified_files + 1))
 done
 
 if [ "$verified_files" -eq 0 ]; then
     echo "::error::VPNHide: no .patch files found in $PATCH_DIR"
-    verify_fail=1
-fi
-
-if [ -n "$(find . -maxdepth 6 \( -path ./out -o -path ./bazel-\* \) -prune -o -type f -name '*.rej' -print 2>/dev/null | head -n 1)" ]; then
-    echo "::error::VPNHide: leftover .rej files detected — some hunks were rejected"
-    find . -maxdepth 6 \( -path ./out -o -path ./bazel-\* \) -prune -o -type f -name '*.rej' -print 2>/dev/null | head -n 10
     verify_fail=1
 fi
 
