@@ -93,6 +93,14 @@ on:
         required: false
         type: boolean
         default: true
+      use_bbr:
+        required: false
+        type: boolean
+        default: true
+      add_ghostlock:
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-kernel:
@@ -787,6 +795,7 @@ jobs:
 
       # ==================== Apply Ghostlock Mitigations (CVE-2026-43499 & CVE-2026-53163) ====================
       - name: Apply Ghostlock Mitigations (CVE-2026-43499 & CVE-2026-53163)
+        if: inputs.add_ghostlock
         working-directory: ${{ env.KERNEL_ROOT }}/common
         run: |
           CVE_PATCH="${{ github.workspace }}/patches/cve_2026_43499_rtmutex.patch"
@@ -1246,6 +1255,7 @@ jobs:
 
       # ==================== Configure TCP BBR ====================
       - name: Configure TCP BBR
+        if: inputs.use_bbr
         run: |
           sed -i 's/CONFIG_DEFAULT_CUBIC=y/CONFIG_DEFAULT_CUBIC=n/' "$DEFCONFIG" 2>/dev/null || true
           sed -i 's/CONFIG_DEFAULT_TCP_CONG="cubic"/CONFIG_DEFAULT_TCP_CONG="bbr"/' "$DEFCONFIG" 2>/dev/null || true
@@ -1526,8 +1536,10 @@ jobs:
           [ "${{ inputs.add_nomount }}" = "true" ] && S_NOMOUNT="✅ ACTIVE (Modular v2.1.0 fs/nomount/)" || S_NOMOUNT="❌ DISABLED"
           [ "${{ inputs.add_vpnhide }}" = "true" ] && S_VPNHIDE="✅ ACTIVE (In-Tree Call-Site Hooks)" || S_VPNHIDE="❌ DISABLED"
           [ "${{ inputs.use_bbg }}" = "true" ] && S_BBG="✅ ACTIVE (Anti-Wipe Protection)" || S_BBG="❌ DISABLED"
+          [ "${{ inputs.use_bbr }}" = "true" ] && S_BBR="✅ ACTIVE (BBR Default)" || S_BBR="❌ DISABLED"
           [ "${{ inputs.use_zram }}" = "true" ] && S_ZRAM="✅ ACTIVE (LZ4KD Enhanced)" || S_ZRAM="❌ DISABLED"
           [ "${{ inputs.use_gkid_opts }}" = "true" ] && S_GKID="✅ ACTIVE (MGLRU, F2FS GC 50ms, 1s Freezer, ARM64 Memops)" || S_GKID="❌ DISABLED"
+          [ "${{ inputs.add_ghostlock }}" = "true" ] && S_GHOSTLOCK="✅ MITIGATED (CVE-2026-43499 & CVE-2026-53163)" || S_GHOSTLOCK="❌ DISABLED"
           [ "${{ inputs.use_rekernel }}" = "true" ] && S_REKERNEL="✅ ACTIVE" || S_REKERNEL="❌ DISABLED"
           [ "${{ inputs.supp_op }}" = "true" ] && S_SUPP_OP="✅ ACTIVE" || S_SUPP_OP="❌ DISABLED"
           [ "${{ inputs.droidspaces_ntsync }}" = "true" ] && S_NTSYNC="✅ ACTIVE" || S_NTSYNC="❌ DISABLED"
@@ -1552,10 +1564,10 @@ jobs:
           printf "  • NoMount VFS            : %s\n" "$S_NOMOUNT"
           printf "  • VPNHide In-Tree        : %s\n" "$S_VPNHIDE"
           printf "  • Baseband Guard (BBG)   : %s\n" "$S_BBG"
-          printf "  • TCP Congestion Control : ✅ ACTIVE (BBR Default)\n"
+          printf "  • TCP Congestion Control : %s\n" "$S_BBR"
           printf "  • ZRAM Memory Engine     : %s\n" "$S_ZRAM"
           printf "  • GKID Performance Suite : %s\n" "$S_GKID"
-          printf "  • Ghostlock Mitigations  : ✅ MITIGATED (CVE-2026-43499 & CVE-2026-53163)\n"
+          printf "  • Ghostlock Mitigations  : %s\n" "$S_GHOSTLOCK"
           printf "  • Droidspaces Container  : %s\n" "$S_DROID"
           printf "  • NTSync Driver          : %s\n" "$S_NTSYNC"
           printf "  • OnePlus 8E Processor   : %s\n" "$S_SUPP_OP"
@@ -1586,10 +1598,10 @@ jobs:
           | **NoMount VFS** | $S_NOMOUNT | Modular VFS structure hijacking v2.1.0 in \`fs/nomount/\` |
           | **VPNHide In-Tree** | $S_VPNHIDE | In-tree VPN interface concealment backend in \`security/vpnhide/\` |
           | **Baseband Guard (BBG)** | $S_BBG | Anti-wipe modem partition protection |
-          | **TCP Congestion** | ✅ ACTIVE | TCP BBR (Default Congestion Control) |
+          | **TCP Congestion** | $S_BBR | TCP BBR congestion control algorithm |
           | **ZRAM Compression** | $S_ZRAM | LZ4KD high-ratio memory compression |
           | **GKID Optimizations** | $S_GKID | MGLRU force-on, F2FS GC 50ms, 1s process freezer, ARM64 memops |
-          | **Ghostlock Mitigations** | ✅ MITIGATED | Clean backport for CVE-2026-43499 & CVE-2026-53163 in \`rtmutex.c\` |
+          | **Ghostlock Mitigations** | $S_GHOSTLOCK | Clean backport for CVE-2026-43499 & CVE-2026-53163 in \`rtmutex.c\` |
           | **Droidspaces / NTSync** | $S_DROID | Container slot patch (\`$DS_MODE\`) / NTSync driver |
 
           > 💡 **Installation:** Flash the AnyKernel3 zip via **Kernel Flasher** or custom recovery (**TWRP / OrangeFox**).
