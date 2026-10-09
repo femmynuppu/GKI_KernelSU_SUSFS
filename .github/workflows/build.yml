@@ -390,16 +390,10 @@ jobs:
             exit 1
           fi
 
-          # 仅允许两种状态：已是新规则 / 命中旧规则并替换；其它情况一律报错
-          if grep -qF "$NEW_RULE" "$TARGET_MAKEFILE"; then
-            echo "config_data 规则已是 stock_defconfig，跳过。"
-          elif grep -qF "$OLD_RULE" "$TARGET_MAKEFILE"; then
-            sed -i 's|\$(obj)/config_data: \$(KCONFIG_CONFIG) FORCE|$(obj)/config_data: arch/arm64/configs/stock_defconfig FORCE|' "$TARGET_MAKEFILE"
-            echo "已替换 config_data 规则: $TARGET_MAKEFILE"
-          else
-            echo "::error::未在 $TARGET_MAKEFILE 找到规则: $OLD_RULE"
-            exit 1
-          fi
+      # ==================== Backup Pristine defconfig ====================
+      # Preserve untouched stock defconfig for Kleaf Bazel diff fragment extraction (6.1+)
+      - name: Backup Pristine defconfig
+        run: cp "$DEFCONFIG" "$DEFCONFIG.orig"
 
       # ==================== Extract Actual Sublevel ====================
       - name: Extract Actual Sublevel
@@ -822,10 +816,6 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/ravindu644/Droidspaces-OSS.git /tmp/Droidspaces-OSS
           echo "DROIDSPACES_PATCHES=/tmp/Droidspaces-OSS/Documentation/resources/kernel-patches/GKI" >> $GITHUB_ENV
-
-      # ==================== Backup Original defconfig ====================
-      - name: Backup Original defconfig
-        run: cp "$DEFCONFIG" "$DEFCONFIG.orig"
 
       - name: Integrate Droidspaces Support
         if: inputs.droidspaces != 'off'

@@ -9,6 +9,19 @@ KERNEL_DIR="${1:?usage: inject-vpnhide.sh <kernel_root> <kmi> <defconfig_path>}"
 KMI="${2:?usage: inject-vpnhide.sh <kernel_root> <kmi> <defconfig_path>}"
 DEFCONFIG="${3:?usage: inject-vpnhide.sh <kernel_root> <kmi> <defconfig_path>}"
 SRC_DIR="$(cd "$(dirname "$0")/../src/vpnhide" && pwd)"
+
+# Normalize KMI to canonical GKI patch profile supported by in-tree VPNHide
+case "$KMI" in
+    *-5.10) KMI="android12-5.10" ;;
+    *-5.15) KMI="android13-5.15" ;;
+    *-6.1)  KMI="android14-6.1" ;;
+    *-6.6)  KMI="android15-6.6" ;;
+    *-6.12) KMI="android16-6.12" ;;
+    *-5.4)  KMI="android11-5.4" ;;
+    *-4.19) KMI="android10-4.19" ;;
+    *-4.14) KMI="android10-4.14" ;;
+    *-4.9)  KMI="android10-4.9" ;;
+esac
 PATCH_DIR="$SRC_DIR/builtin/versions/$KMI"
 
 echo "=== Injecting VPNHide In-Tree Backend ==="
