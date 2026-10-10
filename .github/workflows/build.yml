@@ -1488,13 +1488,15 @@ jobs:
           cp "$SRC_DIR/Image.lz4" ./
           gzip -n -k -f -9 ./Image > ./Image.gz
 
-      # ==================== Create AnyKernel3 Package ====================
-      - name: Create AnyKernel3 Package
+      # ==================== Prepare AnyKernel3 Package ====================
+      # The AnyKernel3 directory is staged in place; upload-artifact wraps it
+      # into the downloadable zip, so the downloaded artifact IS the flashable
+      # AnyKernel3 zip — no double extraction needed.
+      - name: Prepare AnyKernel3 Package
         run: |
           cd $ANYKERNEL3
           ZIP_NAME="${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-AnyKernel3.zip"
           mv ../Image ./Image
-          zip -r "../$ZIP_NAME" ./*
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
       # ==================== Collect Patch Rejects ====================
@@ -1525,14 +1527,16 @@ jobs:
           fi
 
       # ==================== Upload Kernel Artifacts ====================
+      # Upload the AnyKernel3 staging directory directly — upload-artifact
+      # produces a single downloadable .zip whose contents are exactly the
+      # AnyKernel3 flashable tree, so it flashes without an extra extract.
       - name: Upload Kernel Artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}
-          path: |
-            *AnyKernel3.zip
-#            *.img
-          compression-level: 9
+          name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}-AnyKernel3
+          path: ${{ env.ANYKERNEL3 }}/
+          if-no-files-found: error
+          compression-level: 0
 
       # ==================== Upload Patch Rejects ====================
       - name: Upload Patch Rejects
