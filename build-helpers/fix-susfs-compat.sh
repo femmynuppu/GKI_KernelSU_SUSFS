@@ -165,5 +165,17 @@ else
     echo "fix-susfs-compat: setuid_hook.c not found — skipping"
 fi
 
+# ---------------------------------------------------------------------------
+# Fix 7: susfs_compat.mk — strip upstream intentional build suspension directives
+# ---------------------------------------------------------------------------
+for mk in "$KERNEL_DIR/drivers/kernelsu/tools/susfs_compat.mk" "$KERNEL_DIR/../KernelSU/kernel/tools/susfs_compat.mk"; do
+    if [ -f "$mk" ]; then
+        if grep -q "Please wait susfs update" "$mk"; then
+            sed -i '/Please wait susfs update/d' "$mk"
+            echo "fix-susfs-compat: sanitized upstream build suspension in $mk"
+        fi
+    fi
+done
+
 echo "fix-susfs-compat: done"
 exit 0
