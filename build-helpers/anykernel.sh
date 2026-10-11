@@ -43,8 +43,9 @@ case $kernel_version in
 esac
 
 ui_print " " "  -> GKI kernel supported: $ksu_supported"
+ui_print "  -> Device running kernel base: $kernel_version"
 $ksu_supported || abort "  -> Non-GKI device, abort."
-
+[ -f "Image" ] || abort "  -> Image binary missing in package!"
 # boot install
 if [ -L "/dev/block/bootdevice/by-name/init_boot_a" -o -L "/dev/block/by-name/init_boot_a" ] || [ -e "/dev/block/by-name/init_boot" ] || [ -e "/dev/block/bootdevice/by-name/init_boot" ]; then
     split_boot # for devices with init_boot ramdisk

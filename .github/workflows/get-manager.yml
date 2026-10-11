@@ -191,7 +191,7 @@ jobs:
 
       - name: 上传APK
         if: steps.add_KSU.outcome == 'success'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: BakaSU-Manager(${{ env.KSU_VERSION }})
           path: |
@@ -199,7 +199,7 @@ jobs:
 
       - name: 上传SUSFS模块
         if: steps.add_SUSFS.outcome == 'success'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: susfs-${{ env.SUSFS_NAME }}
           path: ./susfs-module/*

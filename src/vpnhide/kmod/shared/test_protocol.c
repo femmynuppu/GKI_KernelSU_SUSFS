@@ -11,6 +11,45 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_WIN32) || !defined(_POSIX_C_SOURCE)
+static ssize_t portable_getline(char **lineptr, size_t *n, FILE *stream)
+{
+	char *buf;
+	size_t c = 0;
+	int ch;
+
+	if (!lineptr || !n || !stream)
+		return -1;
+	buf = *lineptr;
+	if (!buf || *n == 0) {
+		*n = 256;
+		buf = (char *)malloc(*n);
+		if (!buf)
+			return -1;
+		*lineptr = buf;
+	}
+	while ((ch = fgetc(stream)) != EOF) {
+		if (c + 1 >= *n) {
+			size_t new_n = *n * 2;
+			char *new_buf = (char *)realloc(buf, new_n);
+			if (!new_buf)
+				return -1;
+			buf = new_buf;
+			*lineptr = buf;
+			*n = new_n;
+		}
+		buf[c++] = (char)ch;
+		if (ch == '\n')
+			break;
+	}
+	if (c == 0 && ch == EOF)
+		return -1;
+	buf[c] = '\0';
+	return (ssize_t)c;
+}
+#define getline portable_getline
+#endif
+
 #include "shared/vpnhide_logic.h"
 
 #define MAX_TARGETS 256

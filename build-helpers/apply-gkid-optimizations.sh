@@ -66,6 +66,10 @@ if [ -n "$skipped_list" ]; then
     echo "::warning::GKID patches not present in this kernel build (not supported on this kernel baseline or context drift):$skipped_list"
     echo "GKID SKIP LIST:$skipped_list"
 fi
+if [ -n "${GITHUB_ENV:-}" ] && [ -f "$GITHUB_ENV" ]; then
+    echo "GKID_APPLIED=$applied_count" >> "$GITHUB_ENV"
+    echo "GKID_SKIPPED=$skipped_count" >> "$GITHUB_ENV"
+fi
 REJ_AFTER=$(find . -maxdepth 4 -type f -name '*.rej' 2>/dev/null | sort)
 REJ_NEW=$(comm -13 <(printf '%s\n' "$REJ_BEFORE") <(printf '%s\n' "$REJ_AFTER") 2>/dev/null || true)
 if [ -n "$REJ_NEW" ]; then

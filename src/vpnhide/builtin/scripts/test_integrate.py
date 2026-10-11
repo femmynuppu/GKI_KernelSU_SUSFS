@@ -31,7 +31,7 @@ class IntegrationTests(unittest.TestCase):
 
     def snapshot(self):
         return {
-            str(p.relative_to(self.kernel)): p.read_bytes()
+            p.relative_to(self.kernel).as_posix(): p.read_bytes()
             for p in self.kernel.rglob("*")
             if p.is_file()
         }

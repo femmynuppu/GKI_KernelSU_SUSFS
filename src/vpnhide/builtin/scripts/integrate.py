@@ -66,7 +66,10 @@ def digest(data: bytes) -> str:
 def command(args: list[str], cwd: Path) -> str:
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_ATTR_NOSYSTEM="1")
-    result = subprocess.run(args, cwd=cwd, env=env, capture_output=True, text=True, check=False)
+    cmd_args = list(args)
+    if cmd_args and cmd_args[0] == "git":
+        cmd_args = ["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf", *cmd_args[1:]]
+    result = subprocess.run(cmd_args, cwd=cwd, env=env, capture_output=True, text=True, check=False)
     require(result.returncode == 0, f"{args[0]} failed: {result.stderr.strip()}")
     return result.stdout
 
@@ -194,9 +197,9 @@ def build_plan(
         require(not (kernel / name).exists(), f"Output already exists: {name}")
         data = source.read_bytes()
         after[name] = (data, 0o644)
-        report["source_files"][str(source.relative_to(repo))] = digest(data)
+        report["source_files"][source.relative_to(repo).as_posix()] = digest(data)
     for source in [Path(__file__).resolve(), repo / "builtin/scripts/integration_rules.py"]:
-        report["source_files"][str(source.relative_to(repo))] = digest(source.read_bytes())
+        report["source_files"][source.relative_to(repo).as_posix()] = digest(source.read_bytes())
     return before, after
 
 
@@ -227,7 +230,7 @@ def export_patch(before: FileMap, after: FileMap, output: Path) -> str:
             stage,
         )
     require(patch, "Integration produced an empty patch")
-    (output / "vpnhide.patch").write_text(patch)
+    (output / "vpnhide.patch").write_bytes(patch.encode("utf-8"))
     with tempfile.TemporaryDirectory(prefix="vpnhide-check-") as temp:
         stage = Path(temp)
         command(["git", "init", "-q", "."], stage)
@@ -236,7 +239,10 @@ def export_patch(before: FileMap, after: FileMap, output: Path) -> str:
         command(["git", "apply", "--check", str(output / "vpnhide.patch")], stage)
         command(["git", "apply", str(output / "vpnhide.patch")], stage)
         for name, (data, mode) in after.items():
-            require((stage / name).read_bytes() == data, f"Patch round-trip mismatch: {name}")
+            require(
+                (stage / name).read_bytes().replace(b"\r\n", b"\n") == data.replace(b"\r\n", b"\n"),
+                f"Patch round-trip mismatch: {name}",
+            )
             require(
                 bool((stage / name).stat().st_mode & 0o111) == bool(mode & 0o111),
                 f"Patch changed executable mode: {name}",
@@ -271,13 +277,13 @@ def apply_plan(kernel: Path, before: FileMap, after: FileMap, preconditions: dic
             # is not atomic across files or safe against another concurrent writer.
             with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as stream:
                 temporary = Path(stream.name)
-                try:
-                    stream.write(data)
-                    stream.flush()
-                    temporary.chmod(mode)
-                    os.replace(temporary, target)
-                finally:
-                    temporary.unlink(missing_ok=True)
+                stream.write(data)
+                stream.flush()
+            try:
+                temporary.chmod(mode)
+                os.replace(temporary, target)
+            finally:
+                temporary.unlink(missing_ok=True)
             written.append(name)
     except BaseException:
         for name in reversed(written):
@@ -289,7 +295,7 @@ def apply_plan(kernel: Path, before: FileMap, after: FileMap, preconditions: dic
 
 
 def write_report(output: Path, report: dict) -> None:
-    (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    (output / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     lines = [
         "# Built-in integration review",
         "",
@@ -330,7 +336,7 @@ def write_report(output: Path, report: dict) -> None:
         )
     if "error" in report:
         lines.extend(["## Failure", "", report["error"], ""])
-    (output / "report.md").write_text("\n".join(lines))
+    (output / "report.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def integrate(kernel: Path, kmi: str, output: Path, apply: bool = False) -> dict:

@@ -11,59 +11,50 @@ mkdir -p "$TMP/kernel/fs" "$TMP/source"
 : > "$TMP/source/nomount.c"
 : > "$TMP/source/nomount.h"
 
-case "${1:-5.x}" in
-  5.x)
-    cat > "$TMP/kernel/fs/d_path.c" <<'EOF'
-struct path { int unused; };
-#define unlikely(value) (value)
-
-char *d_path(const struct path *path, char *buf, int buflen)
-{
-	char *res = buf + buflen;
-	struct path root;
-	int error;
-
-	/*
-	 * We have various synthetic filesystems that never get mounted.
-	 */
-	(void)path;
-	(void)root;
-	(void)error;
-	return res;
-}
+cat > "$TMP/kernel/fs/Kconfig" <<'EOF'
+menu "File systems"
+endmenu
 EOF
-    ;;
-  6.x)
-    cat > "$TMP/kernel/fs/d_path.c" <<'EOF'
-struct path { int unused; };
-#define unlikely(value) (value)
-#define DECLARE_BUFFER(name, buffer, length) char *name = (buffer) + (length)
 
-char *d_path(const struct path *path, char *buf, int buflen)
-{
-	DECLARE_BUFFER(b, buf, buflen);
-	struct path root;
-
-	/*
-	 * We have various synthetic filesystems that never get mounted.
-	 */
-	(void)path;
-	(void)root;
-	return b;
-}
+cat > "$TMP/kernel/fs/Makefile" <<'EOF'
+# fs Makefile
+obj-y += open.o
 EOF
-    ;;
-  *)
-    echo "usage: $0 [5.x|6.x]" >&2
-    exit 2
-    ;;
-esac
+
+# Seed legacy v1.1.0 files to ensure cleanup contract works
+touch "$TMP/kernel/fs/nomount.c" "$TMP/kernel/fs/nomount.h"
+echo 'config NOMOUNT' >> "$TMP/kernel/fs/Kconfig"
+echo 'obj-$(CONFIG_NOMOUNT) += nomount.o' >> "$TMP/kernel/fs/Makefile"
+
+# Create mock v2.1 source files
+echo '/* nomount c */' > "$TMP/source/nomount.c"
+echo '/* nomount h */' > "$TMP/source/nomount.h"
+echo 'config NOMOUNT' > "$TMP/source/Kconfig"
+echo 'obj-$(CONFIG_NOMOUNT) += nomount.o' > "$TMP/source/Makefile"
 
 (
   cd "$TMP/kernel"
-  bash "$SCRIPT_DIR/inject-nomount.sh" "$TMP/source" >/dev/null 2>&1 || true
+  bash "$SCRIPT_DIR/inject-nomount.sh" "$TMP/source" >/dev/null
+  # Test idempotency on second run
+  bash "$SCRIPT_DIR/inject-nomount.sh" "$TMP/source" >/dev/null
 )
 
-grep -q 'nm_path = nomount_handle_dpath(path, buf, buflen);' "$TMP/kernel/fs/d_path.c"
-cc -std=gnu89 -DCONFIG_NOMOUNT -Wdeclaration-after-statement -Werror \
-  -fsyntax-only "$TMP/kernel/fs/d_path.c"
+# Verify v2.1 directory and files
+[ -f "$TMP/kernel/fs/nomount/nomount.c" ] || { echo "FAIL: fs/nomount/nomount.c missing"; exit 1; }
+[ -f "$TMP/kernel/fs/nomount/nomount.h" ] || { echo "FAIL: fs/nomount/nomount.h missing"; exit 1; }
+[ -f "$TMP/kernel/fs/nomount/Kconfig" ] || { echo "FAIL: fs/nomount/Kconfig missing"; exit 1; }
+[ -f "$TMP/kernel/fs/nomount/Makefile" ] || { echo "FAIL: fs/nomount/Makefile missing"; exit 1; }
+
+# Verify legacy cleanup
+[ ! -f "$TMP/kernel/fs/nomount.c" ] || { echo "FAIL: legacy fs/nomount.c was not cleaned up"; exit 1; }
+[ ! -f "$TMP/kernel/fs/nomount.h" ] || { echo "FAIL: legacy fs/nomount.h was not cleaned up"; exit 1; }
+
+# Verify Makefile wiring (idempotent, exactly 1 occurrence)
+mk_count=$(grep -c 'obj-\$(CONFIG_NOMOUNT) += nomount/' "$TMP/kernel/fs/Makefile" || true)
+[ "$mk_count" -eq 1 ] || { echo "FAIL: fs/Makefile has $mk_count entries, expected 1"; exit 1; }
+
+# Verify Kconfig wiring (idempotent, exactly 1 occurrence)
+kc_count=$(grep -c 'source "fs/nomount/Kconfig"' "$TMP/kernel/fs/Kconfig" || true)
+[ "$kc_count" -eq 1 ] || { echo "FAIL: fs/Kconfig has $kc_count entries, expected 1"; exit 1; }
+
+echo "NoMount v2.1 integration contract passed"

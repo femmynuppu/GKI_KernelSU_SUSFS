@@ -230,7 +230,7 @@ jobs:
       - build-a16-6-12
     steps:
       - name: 下载冲突文件
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: ./downloaded-artifacts
           pattern: '*-Rejects'
@@ -250,7 +250,7 @@ jobs:
           fi
 
       - name: 上传汇总冲突文件
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: AIO-REJ
           path: AIO-REJ.zip
@@ -283,6 +283,10 @@ jobs:
       # ==================== 设置显示名称 ====================
       # 预计算各种显示名称，简化后续引用
       - name: 设置显示名称
+        env:
+          IN_KSU_BRANCH: ${{ inputs.kernelsu_branch }}
+          IN_USE_ZRAM: ${{ inputs.use_zram }}
+          IN_USE_BBG: ${{ inputs.use_bbg }}
         run: |
           KSU_NAME="BakaSU"
           echo "KSU_NAME=$KSU_NAME" >> $GITHUB_ENV
@@ -292,16 +296,16 @@ jobs:
           echo "KSU_VER=$KSU_VER" >> $GITHUB_ENV
           echo "SUS_VER=$SUS_VER" >> $GITHUB_ENV
 
-          echo "LZ4_STATUS=${{ inputs.use_zram && '开启' || '未开启' }}" >> $GITHUB_ENV
-          echo "BBG_STATUS=${{ inputs.use_bbg && '支持' || '不支持' }}" >> $GITHUB_ENV
-          echo "LZ4_SUFFIX=${{ inputs.use_zram && '、LZ4KD' || '' }}" >> $GITHUB_ENV
+          [ "$IN_USE_ZRAM" = "true" ] && LZ4_STATUS="开启" || LZ4_STATUS="未开启"
+          [ "$IN_USE_BBG" = "true" ] && BBG_STATUS="支持" || BBG_STATUS="不支持"
+          [ "$IN_USE_ZRAM" = "true" ] && LZ4_SUFFIX="、LZ4KD" || LZ4_SUFFIX=""
 
           echo "HOOK_TYPE=-> SUSFS Inline Hooks" >> $GITHUB_ENV
           echo "MOUNT_TYPE=-> Magic Mount 支持" >> $GITHUB_ENV
           echo "KSU_SUFFIX=" >> $GITHUB_ENV
 
-          if [ -n "${{ inputs.kernelsu_branch }}" ]; then
-            echo "BRANCH_INFO=(${{ inputs.kernelsu_branch }})" >> $GITHUB_ENV
+          if [ -n "$IN_KSU_BRANCH" ]; then
+            echo "BRANCH_INFO=($IN_KSU_BRANCH)" >> $GITHUB_ENV
           else
             echo "BRANCH_INFO=稳定版" >> $GITHUB_ENV
           fi
@@ -326,44 +330,47 @@ jobs:
           [[ "$failed" -ne 0 ]] && exit 1 || true
 
       - name: 检出代码
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: 确定 KSU 分支
         if: inputs.kernelsu_branch != ''
+        env:
+          IN_KSU_BRANCH: ${{ inputs.kernelsu_branch }}
         run: |
-          BRANCH="${{ inputs.kernelsu_branch }}"
-          echo "KSU_BRANCH=$BRANCH" >> $GITHUB_ENV
+          echo "KSU_BRANCH=$IN_KSU_BRANCH" >> $GITHUB_ENV
 
       - name: 获取 KernelSU 提交信息
+        env:
+          IN_KSU_BRANCH: ${{ inputs.kernelsu_branch }}
         run: |
           REPO_URL="https://github.com/Baka-SU/BakaSU.git"
           REPO_URL2="Baka-SU/BakaSU"
 
           # 如果用户输入了自定义分支/commit，优先使用
-          if [ -n "${{ inputs.kernelsu_branch }}" ]; then
-            BRANCH_INPUT="${{ inputs.kernelsu_branch }}"
+          if [ -n "$IN_KSU_BRANCH" ]; then
+            BRANCH_INPUT="$IN_KSU_BRANCH"
             # 检查是否是 commit hash (40位十六进制)
             if [[ "$BRANCH_INPUT" =~ ^[a-fA-F0-9]{40}$ ]]; then
               KSU_REF=$BRANCH_INPUT
               KSU_URL="https://github.com/$REPO_URL2/commit/$BRANCH_INPUT"
             else
               # 是分支名，获取该分支的最新 commit
-              COMMIT_HASH=$(git ls-remote $REPO_URL refs/heads/$BRANCH_INPUT | awk '{ print $1 }')
+              COMMIT_HASH=$(git ls-remote "$REPO_URL" "refs/heads/$BRANCH_INPUT" | awk '{ print $1 }')
               KSU_REF=$COMMIT_HASH
               KSU_URL="https://github.com/$REPO_URL2/commit/$COMMIT_HASH"
             fi
           else
             # 稳定版：获取最新 tag
-            TAG=$(git ls-remote --tags --sort=-v:refname $REPO_URL | grep -o 'refs/tags/.*' | cut -d'/' -f3 | head -n1)
+            TAG=$(git ls-remote --tags --sort=-v:refname "$REPO_URL" | grep -o 'refs/tags/.*' | cut -d'/' -f3 | head -n1)
             KSU_REF=$TAG
             KSU_URL="https://github.com/$REPO_URL2/releases/tag/$TAG"
           fi
 
           echo "KSU_REF=$KSU_REF" >> $GITHUB_ENV
           echo "KSU_URL=$KSU_URL" >> $GITHUB_ENV
-
       - name: 获取 SUSFS 提交信息
         run: |
           GITLAB_OWNER="simonpunk"
@@ -502,7 +509,7 @@ jobs:
           echo "生成标签: $NEW_TAG"
 
       - name: 下载构建产物
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: ./downloaded-artifacts
 
@@ -550,42 +557,49 @@ jobs:
           gh release edit --draft=false "$NEW_TAG"
 
       - name: 构建摘要
+        env:
+          IN_RELEASE_TYPE: ${{ inputs.release_type }}
         run: |
           echo "## 发布已创建" >> $GITHUB_STEP_SUMMARY
           echo "- **标签**: $NEW_TAG" >> $GITHUB_STEP_SUMMARY
-          echo "- **类型**: ${{ inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **类型**: $IN_RELEASE_TYPE" >> $GITHUB_STEP_SUMMARY
           echo "- **链接**: https://github.com/$REPO_OWNER/$REPO_NAME/releases/tag/$NEW_TAG" >> $GITHUB_STEP_SUMMARY
 
       - name: 发送 Telegram 频道通知
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
+          INPUT_COMMIT: ${{ inputs.commit }}
+          INPUT_CHANGE_LOG: ${{ inputs.change_log }}
+          IN_CANCEL_SUSFS: ${{ inputs.cancel_susfs }}
+          IN_USE_BBG: ${{ inputs.use_bbg }}
+          IN_USE_ZRAM: ${{ inputs.use_zram }}
+          IN_USE_REKERNEL: ${{ inputs.use_rekernel }}
+          IN_DROIDSPACES: ${{ inputs.droidspaces }}
+          IN_DROIDSPACES_NTSYNC: ${{ inputs.droidspaces_ntsync }}
         run: |
           set -euo pipefail
-
-          INPUT_COMMIT="${{ inputs.commit }}"
-          INPUT_CHANGE_LOG="${{ inputs.change_log }}"
 
           TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
           
-          Branch: <code>${{ github.ref_name }}</code>
+          Branch: <code>${GITHUB_REF_NAME:-}</code>
           Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
           
           Features:
           <pre>BakaSU = true
-          SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
-          BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
-          LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
-          Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
-          Droidspaces = ${{ inputs.droidspaces }}${{ inputs.droidspaces_ntsync && ' + NTSync' || '' }}
+          SuSFS = $([ "$IN_CANCEL_SUSFS" = "true" ] && echo "false" || echo "true")
+          BBG = $([ "$IN_USE_BBG" = "true" ] && echo "true" || echo "false")
+          LZ4KD = $([ "$IN_USE_ZRAM" = "true" ] && echo "true" || echo "false")
+          Re-Kernel = $([ "$IN_USE_REKERNEL" = "true" ] && echo "true" || echo "false")
+          Droidspaces = ${IN_DROIDSPACES}$([ "$IN_DROIDSPACES_NTSYNC" = "true" ] && echo " + NTSync" || echo "")
           KPatch-Next Support = true</pre>
           Change Log:
           <pre>${INPUT_CHANGE_LOG}
           </pre>
 
-          Download: <a href="https://github.com/${{ github.repository }}/releases/tag/${NEW_TAG}">Click Here</a>
+          Download: <a href="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${NEW_TAG}">Click Here</a>
 
           Note: The "commit" here refers to BakaSU's commit, not this repository's.
           EOF
@@ -600,33 +614,38 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID_2 }}
-          message_thread_id: ${{secrets.MESSAGE_THREAD_ID}}
+          message_thread_id: ${{ secrets.MESSAGE_THREAD_ID }}
+          INPUT_COMMIT: ${{ inputs.commit }}
+          INPUT_CHANGE_LOG: ${{ inputs.change_log }}
+          IN_CANCEL_SUSFS: ${{ inputs.cancel_susfs }}
+          IN_USE_BBG: ${{ inputs.use_bbg }}
+          IN_USE_ZRAM: ${{ inputs.use_zram }}
+          IN_USE_REKERNEL: ${{ inputs.use_rekernel }}
+          IN_DROIDSPACES: ${{ inputs.droidspaces }}
+          IN_DROIDSPACES_NTSYNC: ${{ inputs.droidspaces_ntsync }}
         run: |
           set -euo pipefail
-
-          INPUT_COMMIT="${{ inputs.commit }}"
-          INPUT_CHANGE_LOG="${{ inputs.change_log }}"
 
           TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
 
-          Branch: <code>${{ github.ref_name }}</code>
+          Branch: <code>${GITHUB_REF_NAME:-}</code>
           Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
 
           Features:
           <pre>BakaSU = true
-          SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
-          BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
-          LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
-          Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
-          Droidspaces = ${{ inputs.droidspaces }}${{ inputs.droidspaces_ntsync && ' + NTSync' || '' }}
+          SuSFS = $([ "$IN_CANCEL_SUSFS" = "true" ] && echo "false" || echo "true")
+          BBG = $([ "$IN_USE_BBG" = "true" ] && echo "true" || echo "false")
+          LZ4KD = $([ "$IN_USE_ZRAM" = "true" ] && echo "true" || echo "false")
+          Re-Kernel = $([ "$IN_USE_REKERNEL" = "true" ] && echo "true" || echo "false")
+          Droidspaces = ${IN_DROIDSPACES}$([ "$IN_DROIDSPACES_NTSYNC" = "true" ] && echo " + NTSync" || echo "")
           KPatch-Next Support = true</pre>
           Change Log:
           <pre>${INPUT_CHANGE_LOG}
           </pre>
 
-          Download: <a href="https://github.com/${{ github.repository }}/releases/tag/${NEW_TAG}">View In Releases</a>
+          Download: <a href="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${NEW_TAG}">View In Releases</a>
 
           Note: The "commit" here refers to BakaSU's commit, not this repository's.
           EOF
@@ -642,33 +661,38 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID_3 }}
-          message_thread_id: ${{secrets.MESSAGE_THREAD_ID_2}}
+          message_thread_id: ${{ secrets.MESSAGE_THREAD_ID_2 }}
+          INPUT_COMMIT: ${{ inputs.commit }}
+          INPUT_CHANGE_LOG: ${{ inputs.change_log }}
+          IN_CANCEL_SUSFS: ${{ inputs.cancel_susfs }}
+          IN_USE_BBG: ${{ inputs.use_bbg }}
+          IN_USE_ZRAM: ${{ inputs.use_zram }}
+          IN_USE_REKERNEL: ${{ inputs.use_rekernel }}
+          IN_DROIDSPACES: ${{ inputs.droidspaces }}
+          IN_DROIDSPACES_NTSYNC: ${{ inputs.droidspaces_ntsync }}
         run: |
           set -euo pipefail
-
-          INPUT_COMMIT="${{ inputs.commit }}"
-          INPUT_CHANGE_LOG="${{ inputs.change_log }}"
 
           TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
 
-          Branch: <code>${{ github.ref_name }}</code>
+          Branch: <code>${GITHUB_REF_NAME:-}</code>
           Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
 
           Features:
           <pre>BakaSU = true
-          SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
-          BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
-          LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
-          Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
-          Droidspaces = ${{ inputs.droidspaces }}${{ inputs.droidspaces_ntsync && ' + NTSync' || '' }}
+          SuSFS = $([ "$IN_CANCEL_SUSFS" = "true" ] && echo "false" || echo "true")
+          BBG = $([ "$IN_USE_BBG" = "true" ] && echo "true" || echo "false")
+          LZ4KD = $([ "$IN_USE_ZRAM" = "true" ] && echo "true" || echo "false")
+          Re-Kernel = $([ "$IN_USE_REKERNEL" = "true" ] && echo "true" || echo "false")
+          Droidspaces = ${IN_DROIDSPACES}$([ "$IN_DROIDSPACES_NTSYNC" = "true" ] && echo " + NTSync" || echo "")
           KPatch-Next Support = true</pre>
           Change Log:
           <pre>${INPUT_CHANGE_LOG}
           </pre>
 
-          Download: <a href="https://github.com/${{ github.repository }}/releases/tag/${NEW_TAG}">View In Releases</a>
+          Download: <a href="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${NEW_TAG}">View In Releases</a>
 
           Note: The "commit" here refers to BakaSU's commit, not this repository's.
           EOF

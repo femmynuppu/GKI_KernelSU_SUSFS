@@ -116,57 +116,6 @@ jobs:
       CCACHE_HARDLINK: "true"
 
     steps:
-      # ==================== Build Configuration Summary ====================
-      - name: Build Configuration Summary
-        run: |
-          echo "========================================"
-          echo "       GKI Kernel Build Configuration"
-          echo "========================================"
-          echo "Android Version  : ${{ inputs.android_version }}"
-          echo "Kernel Version   : ${{ inputs.kernel_version }}"
-          echo "Sublevel         : ${{ inputs.sub_level }}"
-          echo "Patch Level      : ${{ inputs.os_patch_level }}"
-          echo "KSU Variant      : ${{ inputs.ksu_variant }}"
-          echo "KSU Branch       : ${{ inputs.ksu_branch }}"
-          echo "Build Time       : ${{ inputs.build_time }}"
-          echo "SUSFS Enabled    : ${{ inputs.enable_susfs }}"
-          echo "ZRAM Enabled     : ${{ inputs.use_zram }}"
-          echo "BBG Enabled      : ${{ inputs.use_bbg }}"
-          echo "Re-Kernel        : ${{ inputs.use_rekernel }}"
-          echo "Droidspaces      : ${{ inputs.droidspaces }}"
-          echo "NTSync           : ${{ inputs.droidspaces_ntsync }}"
-          echo "NoMount VFS      : ${{ inputs.add_nomount }}"
-          echo "VPNHide In-Tree  : ${{ inputs.add_vpnhide }}"
-          echo "GKID Opts        : ${{ inputs.use_gkid_opts }}"
-          echo "Stock Defconfig  : Auto-detect config/stock_defconfig"
-          echo "========================================"
-
-          cat << EOF | sed 's/^[[:space:]]*//' >> "$GITHUB_STEP_SUMMARY"
-          # 🚀 GKI Kernel Build (In Progress)
-
-          ### 📦 Target Configuration
-          | Attribute | Value |
-          |---|---|
-          | **Android Version** | \`${{ inputs.android_version }}\` |
-          | **Kernel Base** | \`Linux ${{ inputs.kernel_version }}.${{ inputs.sub_level }} (${{ inputs.os_patch_level }})\` |
-          | **Root Provider** | **${{ inputs.ksu_variant }}** (\`${{ inputs.ksu_branch || 'default' }}\`) |
-          | **Spoofed Release** | \`${{ inputs.version || 'Stock GKI Release' }}\` |
-          | **Spoofed Timestamp** | \`${{ inputs.build_time || 'Current UTC' }}\` |
-
-          ### 🛡️ Subsystem Configuration
-          | Subsystem | Status | Description |
-          |---|---|---|
-          | **BakaSU Core** | ✅ ENABLED | Kernel-space root provider |
-          | **SUSFS** | ${{ inputs.enable_susfs && '✅ ENABLED (v2.3.0)' || '❌ DISABLED' }} | Kernel root hiding (Inline hook) |
-          | **NoMount VFS** | ${{ inputs.add_nomount && '✅ ENABLED (v2.1.0)' || '❌ DISABLED' }} | Mountless path redirection di \`fs/nomount/\` |
-          | **VPNHide In-Tree** | ${{ inputs.add_vpnhide && '✅ ENABLED' || '❌ DISABLED' }} | VPN interface concealment di \`security/vpnhide/\` |
-          | **TCP Congestion** | ✅ ENABLED (BBR) | Default congestion control algorithm |
-          | **ZRAM Engine** | ${{ inputs.use_zram && '✅ ENABLED (LZ4KD)' || '❌ DISABLED' }} | High-speed memory compression |
-          | **GKID Optimizations** | ${{ inputs.use_gkid_opts && '✅ ENABLED' || '❌ DISABLED' }} | Fast freezer, F2FS GC 50ms, ARM64 memops |
-          | **Baseband Guard** | ${{ inputs.use_bbg && '✅ ENABLED' || '❌ DISABLED' }} | Anti-wipe modem partition protection |
-          | **Ghostlock Fix** | ✅ ENABLED | CVE-2026-43499 & CVE-2026-53163 in \`rtmutex.c\` |
-          EOF
-
       # ==================== Sanitize Free-Text Inputs ====================
       # Reject newline / carriage-return / null in free-text inputs before they flow
       # into $GITHUB_ENV writes or sed/perl interpolations. A newline in build_time,
@@ -201,9 +150,77 @@ jobs:
           check revision "$IN_REVISION"
           [ "$fail" -eq 0 ] || exit 1
 
+      # ==================== Build Configuration Summary ====================
+      - name: Build Configuration Summary
+        env:
+          IN_ANDROID_VER: ${{ inputs.android_version }}
+          IN_KERNEL_VER: ${{ inputs.kernel_version }}
+          IN_SUB_LEVEL: ${{ inputs.sub_level }}
+          IN_OS_PATCH: ${{ inputs.os_patch_level }}
+          IN_KSU_VARIANT: ${{ inputs.ksu_variant }}
+          IN_KSU_BRANCH: ${{ inputs.ksu_branch }}
+          IN_BUILD_TIME: ${{ inputs.build_time }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_ENABLE_SUSFS: ${{ inputs.enable_susfs }}
+          IN_USE_ZRAM: ${{ inputs.use_zram }}
+          IN_USE_BBG: ${{ inputs.use_bbg }}
+          IN_USE_REKERNEL: ${{ inputs.use_rekernel }}
+          IN_DROIDSPACES: ${{ inputs.droidspaces }}
+          IN_NTSYNC: ${{ inputs.droidspaces_ntsync }}
+          IN_NOMOUNT: ${{ inputs.add_nomount }}
+          IN_VPNHIDE: ${{ inputs.add_vpnhide }}
+          IN_GKID: ${{ inputs.use_gkid_opts }}
+        run: |
+          echo "========================================"
+          echo "       GKI Kernel Build Configuration"
+          echo "========================================"
+          echo "Android Version  : $IN_ANDROID_VER"
+          echo "Kernel Version   : $IN_KERNEL_VER"
+          echo "Sublevel         : $IN_SUB_LEVEL"
+          echo "Patch Level      : $IN_OS_PATCH"
+          echo "KSU Variant      : $IN_KSU_VARIANT"
+          echo "KSU Branch       : $IN_KSU_BRANCH"
+          echo "Build Time       : $IN_BUILD_TIME"
+          echo "SUSFS Enabled    : $IN_ENABLE_SUSFS"
+          echo "ZRAM Enabled     : $IN_USE_ZRAM"
+          echo "BBG Enabled      : $IN_USE_BBG"
+          echo "Re-Kernel        : $IN_USE_REKERNEL"
+          echo "Droidspaces      : $IN_DROIDSPACES"
+          echo "NTSync           : $IN_NTSYNC"
+          echo "NoMount VFS      : $IN_NOMOUNT"
+          echo "VPNHide In-Tree  : $IN_VPNHIDE"
+          echo "GKID Opts        : $IN_GKID"
+          echo "Stock Defconfig  : Auto-detect config/stock_defconfig"
+          echo "========================================"
+
+          cat << EOF | sed 's/^[[:space:]]*//' >> "$GITHUB_STEP_SUMMARY"
+          # 🚀 GKI Kernel Build (In Progress)
+
+          ### 📦 Target Configuration
+          | Attribute | Value |
+          |---|---|
+          | **Android Version** | \`$IN_ANDROID_VER\` |
+          | **Kernel Base** | \`Linux $IN_KERNEL_VER.$IN_SUB_LEVEL ($IN_OS_PATCH)\` |
+          | **Root Provider** | **$IN_KSU_VARIANT** (\`${IN_KSU_BRANCH:-default}\`) |
+          | **Spoofed Release** | \`${IN_VERSION:-Stock GKI Release}\` |
+          | **Spoofed Timestamp** | \`${IN_BUILD_TIME:-Current UTC}\` |
+
+          ### 🛡️ Subsystem Configuration
+          | Subsystem | Status | Description |
+          |---|---|---|
+          | **BakaSU Core** | ✅ ENABLED | Kernel-space root provider |
+          | **SUSFS** | $([ "$IN_ENABLE_SUSFS" = "true" ] && echo "✅ ENABLED (v2.3.0)" || echo "❌ DISABLED") | Kernel root hiding (Inline hook) |
+          | **NoMount VFS** | $([ "$IN_NOMOUNT" = "true" ] && echo "✅ ENABLED (v2.1.0)" || echo "❌ DISABLED") | Mountless path redirection di \`fs/nomount/\` |
+          | **VPNHide In-Tree** | $([ "$IN_VPNHIDE" = "true" ] && echo "✅ ENABLED" || echo "❌ DISABLED") | VPN interface concealment di \`security/vpnhide/\` |
+          | **TCP Congestion** | ✅ ENABLED (BBR) | Default congestion control algorithm |
+          | **ZRAM Engine** | $([ "$IN_USE_ZRAM" = "true" ] && echo "✅ ENABLED (LZ4KD)" || echo "❌ DISABLED") | High-speed memory compression |
+          | **GKID Optimizations** | $([ "$IN_GKID" = "true" ] && echo "✅ ENABLED" || echo "❌ DISABLED") | Fast freezer, F2FS GC 50ms, ARM64 memops |
+          | **Baseband Guard** | $([ "$IN_USE_BBG" = "true" ] && echo "✅ ENABLED" || echo "❌ DISABLED") | Anti-wipe modem partition protection |
+          | **Ghostlock Fix** | ✅ ENABLED | CVE-2026-43499 & CVE-2026-53163 in \`rtmutex.c\` |
+          EOF
       # ==================== Clean Disk Space ====================
       - name: Clean Disk Space
-        uses: endersonmenezes/free-disk-space@v3
+        uses: endersonmenezes/free-disk-space@7901478139cff6e9d44df5972fd8ab8fcade4db1 # v3
         with:
           remove_android: true
           remove_dotnet: true
@@ -219,8 +236,9 @@ jobs:
 
       # ==================== Checkout Repository ====================
       - name: Checkout Repository
-        uses: actions/checkout@v6
-
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
       # ==================== Initialize Build Environment ====================
       - name: Initialize Build Environment
         run: |
@@ -276,7 +294,7 @@ jobs:
 
       # ==================== Restore ccache Cache ====================
       - name: Restore ccache Cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.ccache
           key: ${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.sub_level }}-ccache-${{ github.sha }}
@@ -286,7 +304,7 @@ jobs:
       # ==================== Cache Toolchain ====================
       - name: Cache Toolchain
         id: cache-toolchain
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             kernel-build-tools
@@ -481,9 +499,9 @@ jobs:
       # ==================== Resolve KernelSU Branch ====================
       - name: Resolve KernelSU Branch
         id: ksu-branch
+        env:
+          branch_input: ${{ inputs.ksu_branch }}
         run: |
-          branch_input="${{ inputs.ksu_branch }}"
-
           if [ -n "$branch_input" ]; then
             BRANCH="-s $branch_input"
             echo "Using custom branch/commit: $branch_input"
@@ -499,9 +517,12 @@ jobs:
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           echo "Integrating BakaSU (Variant: ${{ inputs.ksu_variant }})..."
-          curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash $BRANCH
+          curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/5b76b884c75f729a220bb317aa4a4fc78f0e0e9c/kernel/setup.sh" -o setup.sh
+          echo "a2aa30891ea57592abe0e4fb871205a7fdafb0548644d4666a4dd9d30bfce8a4  setup.sh" | sha256sum -c -
+          bash setup.sh $BRANCH
+          rm -f setup.sh
 
-          # Neutralize upstream intentional build suspensions (e.g. commit 48fa4bb7)
+          # Neutralize upstream intentional build suspensions (defense-in-depth)
           if [ -f "KernelSU/kernel/tools/susfs_compat.mk" ]; then
             echo "Checking susfs_compat.mk for upstream suspend directives..."
             sed -i '/Please wait susfs update/d' KernelSU/kernel/tools/susfs_compat.mk || true
@@ -835,7 +856,14 @@ jobs:
           CVE_PATCH="${{ github.workspace }}/patches/cve_2026_43499_rtmutex.patch"
           if [ -f "$CVE_PATCH" ]; then
             echo "Applying Ghostlock rtmutex mitigations (CVE-2026-43499 & CVE-2026-53163)..."
-            patch -p1 --forward < "$CVE_PATCH" || true
+            if patch -p1 -N -s --dry-run < "$CVE_PATCH" >/dev/null 2>&1; then
+              patch -p1 --forward < "$CVE_PATCH"
+              echo "Ghostlock patch applied cleanly"
+            elif grep -q "CVE-2026-43499" kernel/locking/rtmutex.c 2>/dev/null || grep -q "waiter_task->pi_blocked_on" kernel/locking/rtmutex.c 2>/dev/null; then
+              echo "Ghostlock mitigations already present in kernel baseline"
+            else
+              echo "::warning::Ghostlock patch could not be applied on this kernel baseline"
+            fi
           fi
 
       # ==================== Inject VPNHide In-Tree Backend ====================
@@ -1176,10 +1204,13 @@ jobs:
         if: inputs.use_bbg
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
-          wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
+          echo "Integrating Baseband Guard..."
+          curl -fsSL "https://raw.githubusercontent.com/vc-teahouse/Baseband-guard/a54e0dc6cf0aff4dd87fec49644a02d2eb612905/setup.sh" -o bbg_setup.sh
+          echo "73d0474bb46b7e413da8f247af09b139e0d49dd8006d2b64fa9ef04676d630b7  bbg_setup.sh" | sha256sum -c -
+          bash bbg_setup.sh
+          rm -f bbg_setup.sh
           echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' common/security/Kconfig
-
       # ==================== Apply Re-Kernel Driver ====================
       # Re-Kernel 通过 GKI Vendor Hooks 提供内核级保护功能
       - name: Apply Re-Kernel Driver
@@ -1324,6 +1355,10 @@ jobs:
       # ==================== Configure Kernel Release Name ====================
       - name: Configure Kernel Release Name
         working-directory: ${{ env.KERNEL_ROOT }}
+        env:
+          IN_VERSION: ${{ inputs.version }}
+          IN_ANDROID_VER: ${{ inputs.android_version }}
+          IN_KERNEL_VER: ${{ inputs.kernel_version }}
         run: |
           if [ -f "build/build.sh" ]; then
             sed -i 's/-dirty//' ./common/scripts/setlocalversion
@@ -1336,16 +1371,16 @@ jobs:
           fi
 
           # 配置内核名称
-          if [ -n "${{ inputs.version }}" ]; then
-            bash "$GITHUB_WORKSPACE/build-helpers/spoof-kernel-version.sh" "$KERNEL_ROOT/common" "${{ inputs.version }}"
-            CLEAN_VERSION=$(echo "${{ inputs.version }}" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+//')
+          if [ -n "$IN_VERSION" ]; then
+            bash "$GITHUB_WORKSPACE/build-helpers/spoof-kernel-version.sh" "$KERNEL_ROOT/common" "$IN_VERSION"
+            CLEAN_VERSION=$(echo "$IN_VERSION" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+//')
             
             # 定义 KMI_TAG（与自动版本保持一致）
-            case "${{ inputs.android_version }}-${{ inputs.kernel_version }}" in
+            case "${IN_ANDROID_VER}-${IN_KERNEL_VER}" in
               "android14-6.1")  KMI_TAG="android14-11" ;;
               "android15-6.6")  KMI_TAG="android15-8" ;;
               "android16-6.12") KMI_TAG="android16-5" ;;
-              *) KMI_TAG="${{ inputs.android_version }}" ;;
+              *) KMI_TAG="${IN_ANDROID_VER}" ;;
             esac
             
             if [ "${{ inputs.kernel_version }}" = "6.1" ]; then
@@ -1390,15 +1425,15 @@ jobs:
       # ==================== Set Custom Build Timestamp ====================
       - name: Set Custom Build Timestamp
         shell: bash
+        env:
+          INPUT_TIME: ${{ inputs.build_time }}
         run: |
           # 读取输入：输入 N/n 或留空时，使用当前 UTC 时间
-          INPUT_TIME="${{ inputs.build_time }}"
           if [[ -n "$INPUT_TIME" && "$INPUT_TIME" != "N" && "$INPUT_TIME" != "n" ]]; then
             DATESTR="$INPUT_TIME"
           else
             DATESTR="$(TZ='UTC' date +'%a %b %d %T %Z %Y')"
           fi
-
           # 导出给后续编译流程
           echo "使用构建时间: $DATESTR"
           echo "KBUILD_BUILD_TIMESTAMP=$DATESTR" >> "$GITHUB_ENV"
@@ -1422,7 +1457,7 @@ jobs:
 
       # ==================== Compile Kernel ====================
       - name: Compile Kernel
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4
         with:
           timeout_minutes: 30
           max_attempts: 3
@@ -1537,7 +1572,7 @@ jobs:
       # produces a single downloadable .zip whose contents are exactly the
       # AnyKernel3 flashable tree, so it flashes without an extra extract.
       - name: Upload Kernel Artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}-AnyKernel3
           path: ${{ env.ANYKERNEL3 }}/
@@ -1547,7 +1582,7 @@ jobs:
       # ==================== Upload Patch Rejects ====================
       - name: Upload Patch Rejects
         if: always() && env.REJ_COUNT > 0
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}-Rejects
           path: patch-rejects/
@@ -1557,34 +1592,72 @@ jobs:
       # ==================== Build Summary & Feature Banner ====================
       - name: Build Summary & Feature Banner
         if: always()
+        env:
+          IN_ANDROID_VER: ${{ inputs.android_version }}
+          IN_KERNEL_VER: ${{ inputs.kernel_version }}
+          IN_SUB_LEVEL: ${{ inputs.sub_level }}
+          IN_OS_PATCH: ${{ inputs.os_patch_level }}
+          IN_KSU_VARIANT: ${{ inputs.ksu_variant }}
+          IN_KSU_BRANCH: ${{ inputs.ksu_branch }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_BUILD_TIME: ${{ inputs.build_time }}
+          IN_ENABLE_SUSFS: ${{ inputs.enable_susfs }}
+          IN_NOMOUNT: ${{ inputs.add_nomount }}
+          IN_VPNHIDE: ${{ inputs.add_vpnhide }}
+          IN_USE_BBG: ${{ inputs.use_bbg }}
+          IN_USE_BBR: ${{ inputs.use_bbr }}
+          IN_USE_ZRAM: ${{ inputs.use_zram }}
+          IN_GKID: ${{ inputs.use_gkid_opts }}
+          IN_GHOSTLOCK: ${{ inputs.add_ghostlock }}
+          IN_REKERNEL: ${{ inputs.use_rekernel }}
+          IN_SUPP_OP: ${{ inputs.supp_op }}
+          IN_NTSYNC: ${{ inputs.droidspaces_ntsync }}
+          IN_DROIDSPACES: ${{ inputs.droidspaces }}
         run: |
-          ZIP_NAME="${ZIP_NAME:-${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-AnyKernel3.zip}"
+          ZIP_NAME="${ZIP_NAME:-${IN_ANDROID_VER}-${IN_KERNEL_VER}.${IN_SUB_LEVEL}-${IN_OS_PATCH}-AnyKernel3.zip}"
           REJ_COUNT="${REJ_COUNT:-0}"
 
-          [ "${{ inputs.enable_susfs }}" = "true" ] && S_SUSFS="✅ ACTIVE (Inline Hook v2.3.0)" || S_SUSFS="❌ DISABLED"
-          [ "${{ inputs.add_nomount }}" = "true" ] && S_NOMOUNT="✅ ACTIVE (Modular v2.1.0 fs/nomount/)" || S_NOMOUNT="❌ DISABLED"
-          [ "${{ inputs.add_vpnhide }}" = "true" ] && S_VPNHIDE="✅ ACTIVE (In-Tree Call-Site Hooks)" || S_VPNHIDE="❌ DISABLED"
-          [ "${{ inputs.use_bbg }}" = "true" ] && S_BBG="✅ ACTIVE (Anti-Wipe Protection)" || S_BBG="❌ DISABLED"
-          [ "${{ inputs.use_bbr }}" = "true" ] && S_BBR="✅ ACTIVE (BBR Default)" || S_BBR="❌ DISABLED"
-          [ "${{ inputs.use_zram }}" = "true" ] && S_ZRAM="✅ ACTIVE (LZ4KD Enhanced)" || S_ZRAM="❌ DISABLED"
-          [ "${{ inputs.use_gkid_opts }}" = "true" ] && S_GKID="✅ ACTIVE (MGLRU, F2FS GC 50ms, 1s Freezer, ARM64 Memops)" || S_GKID="❌ DISABLED"
-          [ "${{ inputs.add_ghostlock }}" = "true" ] && S_GHOSTLOCK="✅ MITIGATED (CVE-2026-43499 & CVE-2026-53163)" || S_GHOSTLOCK="❌ DISABLED"
-          [ "${{ inputs.use_rekernel }}" = "true" ] && S_REKERNEL="✅ ACTIVE" || S_REKERNEL="❌ DISABLED"
-          [ "${{ inputs.supp_op }}" = "true" ] && S_SUPP_OP="✅ ACTIVE" || S_SUPP_OP="❌ DISABLED"
-          [ "${{ inputs.droidspaces_ntsync }}" = "true" ] && S_NTSYNC="✅ ACTIVE" || S_NTSYNC="❌ DISABLED"
+          [ "$IN_ENABLE_SUSFS" = "true" ] && S_SUSFS="✅ ACTIVE (Inline Hook v2.3.0)" || S_SUSFS="❌ DISABLED"
+          [ "$IN_NOMOUNT" = "true" ] && S_NOMOUNT="✅ ACTIVE (Modular v2.1.0 fs/nomount/)" || S_NOMOUNT="❌ DISABLED"
+          [ "$IN_VPNHIDE" = "true" ] && S_VPNHIDE="✅ ACTIVE (In-Tree Call-Site Hooks)" || S_VPNHIDE="❌ DISABLED"
+          [ "$IN_USE_BBG" = "true" ] && S_BBG="✅ ACTIVE (Anti-Wipe Protection)" || S_BBG="❌ DISABLED"
+          [ "$IN_USE_BBR" = "true" ] && S_BBR="✅ ACTIVE (BBR Default)" || S_BBR="❌ DISABLED"
+          [ "$IN_USE_ZRAM" = "true" ] && S_ZRAM="✅ ACTIVE (LZ4KD Enhanced)" || S_ZRAM="❌ DISABLED"
+          if [ "$IN_GKID" = "true" ]; then
+            if [ -n "${GKID_SKIPPED:-}" ] && [ "${GKID_SKIPPED:-0}" -gt 0 ]; then
+              S_GKID="⚠️ ACTIVE (${GKID_APPLIED:-0} applied, ${GKID_SKIPPED} skipped)"
+            else
+              S_GKID="✅ ACTIVE (MGLRU, F2FS GC 50ms, 1s Freezer, ARM64 Memops)"
+            fi
+          else
+            S_GKID="❌ DISABLED"
+          fi
 
-          DS_MODE="${{ inputs.droidspaces || 'off' }}"
+          if [ "$IN_GHOSTLOCK" = "true" ]; then
+            if grep -q "waiter_task->pi_blocked_on" "$KERNEL_ROOT/common/kernel/locking/rtmutex.c" 2>/dev/null; then
+              S_GHOSTLOCK="✅ MITIGATED (CVE-2026-43499 & CVE-2026-53163)"
+            else
+              S_GHOSTLOCK="⚠️ PARTIAL / UNVERIFIED (Check patch log)"
+            fi
+          else
+            S_GHOSTLOCK="❌ DISABLED"
+          fi
+          [ "$IN_REKERNEL" = "true" ] && S_REKERNEL="✅ ACTIVE" || S_REKERNEL="❌ DISABLED"
+          [ "$IN_SUPP_OP" = "true" ] && S_SUPP_OP="✅ ACTIVE" || S_SUPP_OP="❌ DISABLED"
+          [ "$IN_NTSYNC" = "true" ] && S_NTSYNC="✅ ACTIVE" || S_NTSYNC="❌ DISABLED"
+
+          DS_MODE="${IN_DROIDSPACES:-off}"
           [ "$DS_MODE" != "off" ] && S_DROID="✅ ACTIVE ($DS_MODE)" || S_DROID="❌ DISABLED"
 
-          VER_STR="${{ inputs.version || 'Stock GKI Release' }}"
-          TIME_STR="${{ inputs.build_time || 'Current UTC' }}"
-          KSU_BR="${{ inputs.ksu_branch || 'default' }}"
+          VER_STR="${IN_VERSION:-Stock GKI Release}"
+          TIME_STR="${IN_BUILD_TIME:-Current UTC}"
+          KSU_BR="${IN_KSU_BRANCH:-default}"
 
           echo "================================================================================"
           echo "                   GKI KERNEL BUILD & FEATURE SUMMARY                           "
           echo "================================================================================"
-          printf "  Target Kernel : Linux %s.%s (%s-%s)\n" "${{ inputs.kernel_version }}" "${{ inputs.sub_level }}" "${{ inputs.android_version }}" "${{ inputs.os_patch_level }}"
-          printf "  Root Solution : %s (branch: %s)\n" "${{ inputs.ksu_variant }}" "$KSU_BR"
+          printf "  Target Kernel : Linux %s.%s (%s-%s)\n" "$IN_KERNEL_VER" "$IN_SUB_LEVEL" "$IN_ANDROID_VER" "$IN_OS_PATCH"
+          printf "  Root Solution : %s (branch: %s)\n" "$IN_KSU_VARIANT" "$KSU_BR"
           printf "  Output Package: %s\n" "$ZIP_NAME"
           printf "  Patch Rejects : %s (.rej files)\n" "$REJ_COUNT"
           echo "  --------------------------------------------------------------------------------"
@@ -1612,9 +1685,9 @@ jobs:
           ### 📦 Build Artifact & Identity
           | Attribute | Value |
           |---|---|
-          | **Android Version** | \`${{ inputs.android_version }}\` |
-          | **Kernel Base** | \`Linux ${{ inputs.kernel_version }}.${{ inputs.sub_level }} (${{ inputs.os_patch_level }})\` |
-          | **Root Provider** | **${{ inputs.ksu_variant }}** (\`$KSU_BR\`) |
+          | **Android Version** | \`$IN_ANDROID_VER\` |
+          | **Kernel Base** | \`Linux $IN_KERNEL_VER.$IN_SUB_LEVEL ($IN_OS_PATCH)\` |
+          | **Root Provider** | **$IN_KSU_VARIANT** (\`$KSU_BR\`) |
           | **AnyKernel3 Package** | \`$ZIP_NAME\` |
           | **Patch Rejects** | **$REJ_COUNT** \`.rej\` (Clean) |
           | **Spoofed Release** | \`$VER_STR\` |

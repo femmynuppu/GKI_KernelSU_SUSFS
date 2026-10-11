@@ -25,12 +25,10 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID_3 }}
           MESSAGE_THREAD_ID: ${{ secrets.MESSAGE_THREAD_ID_3 }}
+          INPUT_MSG_TYPE: ${{ inputs.msg_type }}
+          INPUT_CONTENT: ${{ inputs.content }}
         run: |
           set -euo pipefail
-          # 定义输入变量
-          INPUT_MSG_TYPE="${{ inputs.msg_type }}"
-          INPUT_CONTENT="${{ inputs.content }}"
-          
           # 校验关键环境变量
           if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
             echo "错误：BOT_TOKEN 或 CHAT_ID 未配置"
