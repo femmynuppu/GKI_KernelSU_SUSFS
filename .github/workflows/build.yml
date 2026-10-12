@@ -100,7 +100,7 @@ on:
       add_ghostlock:
         required: false
         type: boolean
-        default: true
+        default: false
 
 jobs:
   build-kernel:
@@ -216,7 +216,7 @@ jobs:
           | **ZRAM Engine** | $([ "$IN_USE_ZRAM" = "true" ] && echo "✅ ENABLED (LZ4KD)" || echo "❌ DISABLED") | High-speed memory compression |
           | **GKID Optimizations** | $([ "$IN_GKID" = "true" ] && echo "✅ ENABLED" || echo "❌ DISABLED") | Fast freezer, F2FS GC 50ms, ARM64 memops |
           | **Baseband Guard** | $([ "$IN_USE_BBG" = "true" ] && echo "✅ ENABLED" || echo "❌ DISABLED") | Anti-wipe modem partition protection |
-          | **Ghostlock Fix** | ✅ ENABLED | CVE-2026-43499 & CVE-2026-53163 in \`rtmutex.c\` |
+          | **Ghostlock Fix** | $([ "${{ inputs.add_ghostlock }}" = "true" ] && echo "✅ ENABLED" || echo "❌ DISABLED") | CVE-2026-43499 & CVE-2026-53163 in \`rtmutex.c\` (default: off) |
           EOF
       # ==================== Clean Disk Space ====================
       - name: Clean Disk Space
@@ -864,6 +864,8 @@ jobs:
             else
               echo "::warning::Ghostlock patch could not be applied on this kernel baseline"
             fi
+          else
+            echo "::warning::Ghostlock patch file not found (removed — causes futex corruption on MediaTek GKI). Skipping."
           fi
 
       # ==================== Inject VPNHide In-Tree Backend ====================
