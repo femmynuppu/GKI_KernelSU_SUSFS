@@ -503,10 +503,10 @@ jobs:
           branch_input: ${{ inputs.ksu_branch }}
         run: |
           if [ -n "$branch_input" ]; then
-            BRANCH="-s $branch_input"
-            echo "Using custom branch/commit: $branch_input"
+            BRANCH="${branch_input#-s }"
+            echo "Using custom branch/commit: $BRANCH"
           else
-            BRANCH="-s main"
+            BRANCH="main"
           fi
 
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
@@ -519,7 +519,7 @@ jobs:
           echo "Integrating BakaSU (Variant: ${{ inputs.ksu_variant }})..."
           curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/5b76b884c75f729a220bb317aa4a4fc78f0e0e9c/kernel/setup.sh" -o setup.sh
           echo "a2aa30891ea57592abe0e4fb871205a7fdafb0548644d4666a4dd9d30bfce8a4  setup.sh" | sha256sum -c -
-          bash setup.sh $BRANCH
+          bash setup.sh "$BRANCH"
           rm -f setup.sh
 
           # Neutralize upstream intentional build suspensions (defense-in-depth)
