@@ -124,7 +124,16 @@ on:
         required: false
         type: boolean
         default: true
-
+      add_vpnhide:
+        description: "Enable In-Tree VPNHide Backend (hide VPN interface)"
+        required: false
+        type: boolean
+        default: false
+      add_ghostlock:
+        description: "Apply Ghostlock Mitigations (CVE-2026-43499 & CVE-2026-53163)"
+        required: false
+        type: boolean
+        default: false
 jobs:
   build-custom-kernel:
     name: "${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.android_version }}-${{ inputs.os_patch_level }}"
@@ -150,6 +159,8 @@ jobs:
       add_zeromount: ${{ inputs.add_zeromount }}
       add_selinux_evasion: ${{ inputs.add_selinux_evasion }}
       add_nomount: ${{ inputs.add_nomount }}
+      add_vpnhide: ${{ inputs.add_vpnhide }}
+      add_ghostlock: ${{ inputs.add_ghostlock || false }}
 
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml

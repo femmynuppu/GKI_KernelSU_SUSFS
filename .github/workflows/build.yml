@@ -93,6 +93,14 @@ on:
         required: false
         type: boolean
         default: false
+      add_vpnhide:
+        required: false
+        type: boolean
+        default: false
+      add_ghostlock:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-kernel:
@@ -130,6 +138,8 @@ jobs:
           echo "ZeroMount        : ${{ inputs.add_zeromount }}"
           echo "SELinux Evasion  : ${{ inputs.add_selinux_evasion }}"
           echo "NoMount VFS      : ${{ inputs.add_nomount }}"
+          echo "VPNHide          : ${{ inputs.add_vpnhide }}"
+          echo "Ghostlock        : ${{ inputs.add_ghostlock }}"
           echo "Stock Defconfig  : Auto-detect config/stock_defconfig"
           echo "========================================"
 
@@ -1006,6 +1016,7 @@ jobs:
 
       # ==================== Apply Ghostlock Mitigations (CVE-2026-43499 & CVE-2026-53163) ====================
       - name: Apply Ghostlock Mitigations (CVE-2026-43499 & CVE-2026-53163)
+        if: inputs.add_ghostlock
         working-directory: ${{ env.KERNEL_ROOT }}/common
         run: |
           CVE_PATCH="${{ github.workspace }}/patches/cve_2026_43499_rtmutex.patch"
@@ -1014,6 +1025,12 @@ jobs:
             patch -p1 --forward < "$CVE_PATCH" || true
           fi
 
+      # ==================== Inject VPNHide In-Tree Backend ====================
+      - name: Inject VPNHide Hooks
+        if: inputs.add_vpnhide
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          bash "${{ github.workspace }}/build-helpers/inject-vpnhide.sh" "$PWD" "${{ inputs.android_version }}-${{ inputs.kernel_version }}" "$DEFCONFIG"
       - name: Clone Droidspaces Patches
         if: inputs.droidspaces != 'off'
         run: |
