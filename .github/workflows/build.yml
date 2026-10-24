@@ -259,14 +259,14 @@ jobs:
       # ==================== Clone Dependencies ====================
       - name: Clone Dependencies
         run: |
-          ANYKERNEL_BRANCH="master"
           SUSFS_BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
 
           echo "克隆 AnyKernel3..."
-          git clone https://github.com/osm0sis/AnyKernel3.git -b "master"
+          bash "$GITHUB_WORKSPACE/build-helpers/checkout-locked-dependency.sh" anykernel3 AnyKernel3
           if [ -f "$GITHUB_WORKSPACE/build-helpers/anykernel.sh" ]; then
             cp "$GITHUB_WORKSPACE/build-helpers/anykernel.sh" AnyKernel3/anykernel.sh
           fi
+          python3 "$GITHUB_WORKSPACE/build-helpers/test-anykernel-installer.py" AnyKernel3
           rm -rf AnyKernel3/.git
 
           echo "克隆 SUSFS (分支: $SUSFS_BRANCH)..."

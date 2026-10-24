@@ -23,11 +23,12 @@ supported.vendorpatchlevels=
 
 ### AnyKernel install
 ## boot shell variables
-block=boot
-is_slot_device=auto
-ramdisk_compression=auto
-patch_vbmeta_flag=auto
-no_magisk_check=1
+# AK3 base 20260904 reads these case-sensitive uppercase names.
+BLOCK=boot
+IS_SLOT_DEVICE=auto
+RAMDISK_COMPRESSION=auto
+PATCH_VBMETA_FLAG=auto
+NO_MAGISK_CHECK=1
 
 # import functions/variables and setup patching - see for reference (DO NOT REMOVE)
 . tools/ak3-core.sh

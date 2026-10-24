@@ -1,5 +1,11 @@
 {
   "checked_at": "2026-10-25",
+  "anykernel3": {
+    "url": "https://github.com/osm0sis/AnyKernel3.git",
+    "ref": "master",
+    "commit": "020dfeccf9d7e962a48400fc94d3e451df92eead",
+    "base_version": "20260904"
+  },
   "nomount": {
     "url": "https://github.com/maxsteeel/nomount.git",
     "ref": "master",
