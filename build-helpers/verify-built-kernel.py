@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check the compiled legacy GKI output, then preserve its real configuration."""
 
+import hashlib
 import json
 import os
 import re
@@ -38,16 +39,26 @@ def verify(root: Path, image: Path, output: Path) -> None:
     if missing:
         raise ValueError("compiled configuration is missing: " + ", ".join(missing))
     header = (config.parent / "include/generated/utsrelease.h").read_text()
-    release = re.search(r'#define UTS_RELEASE "([^"]+)"', header)[1]
+    release_match = re.search(r'^#define UTS_RELEASE "([^"]+)"$', header, re.M)
+    if not release_match:
+        raise ValueError("generated UTS_RELEASE header is malformed")
+    release = release_match[1]
     requested = os.environ.get("REQUESTED_RELEASE", "")
     if requested and release != requested:
         raise ValueError(f"compiled release {release!r} differs from {requested!r}")
-    match = re.search(rb"Linux version [^\x00\n]{1,2048}", image.read_bytes())
-    if not match:
+    # Image also contains the printk template "Linux version %s (%s)".
+    # Match the actual release-bearing banner rather than the first occurrence.
+    image_bytes = image.read_bytes()
+    candidates = re.findall(rb"Linux version [^\x00\n]{1,2048}", image_bytes)
+    if not candidates:
         raise ValueError("compiled image has no Linux version banner")
-    banner = match[0].decode(errors="replace")
-    if not banner.startswith(f"Linux version {release} ("):
+    prefix = f"Linux version {release} (".encode()
+    banners = {candidate for candidate in candidates if candidate.startswith(prefix)}
+    if not banners:
         raise ValueError("image banner and generated UTS_RELEASE disagree")
+    if len(banners) != 1:
+        raise ValueError("image contains conflicting banners for generated UTS_RELEASE")
+    banner = banners.pop().decode(errors="replace")
     timestamp = os.environ.get("REQUESTED_BUILD_TIME", "")
     if timestamp and timestamp.lower() != "n" and timestamp not in banner:
         raise ValueError("requested build timestamp is absent from the image banner")
@@ -61,6 +72,7 @@ def verify(root: Path, image: Path, output: Path) -> None:
     shutil.copyfile(Path(__file__).resolve().parent.parent / "config/upstream-lock.json",
                     output / "upstream-lock.json")
     result = {"source_version": source_version, "source_commit": source_commit,
+              "image_sha256": hashlib.sha256(image_bytes).hexdigest(),
               "release": release, "banner": banner, "required_config": required}
     (output / "build.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))

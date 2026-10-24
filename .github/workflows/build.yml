@@ -1367,6 +1367,7 @@ jobs:
           bash "$GITHUB_WORKSPACE/build-helpers/checkout-locked-dependency.sh" bbg "$KERNEL_ROOT/Baseband-guard"
           BBG_COMMIT=$(git -C "$KERNEL_ROOT/Baseband-guard" rev-parse HEAD)
           bash "$KERNEL_ROOT/Baseband-guard/setup.sh" "$BBG_COMMIT"
+          python3 "$GITHUB_WORKSPACE/build-helpers/fix-bbg-host-tools.py" "$KERNEL_ROOT/Baseband-guard/Makefile"
           echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' common/security/Kconfig
 
@@ -1590,6 +1591,11 @@ jobs:
             fi
           fi
 
+      - name: Require Zero Patch Rejects Before Compilation
+        run: |
+          python3 "$GITHUB_WORKSPACE/build-helpers/check-patch-rejects.py" \
+            "$KERNEL_ROOT" "$GITHUB_WORKSPACE/build-evidence/patch-status.json" pre-compile
+
       # ==================== Compile Kernel ====================
       - name: Compile Kernel
         uses: nick-fields/retry@v4
@@ -1647,6 +1653,11 @@ jobs:
             echo "当前 SUSFS 最新提交日期: ${SUSFS_LATEST_COMMIT_DATE}"
             echo "如果日期不同或相差过远则补丁失效、编译失败"
 
+      - name: Require Zero Patch Rejects Before Publishing
+        run: |
+          python3 "$GITHUB_WORKSPACE/build-helpers/check-patch-rejects.py" \
+            "$KERNEL_ROOT" "$GITHUB_WORKSPACE/build-evidence/patch-status.json" post-compile
+
       - name: Verify Compiled Kernel Features and Identity
         if: inputs.kernel_version == '5.10' || inputs.kernel_version == '5.15'
         env:
@@ -1687,7 +1698,7 @@ jobs:
           cp "$SRC_DIR/Image.lz4" ./bootimgs/
           cp "$SRC_DIR/Image" ./
           cp "$SRC_DIR/Image.lz4" ./
-          gzip -n -k -f -9 ./Image > ./Image.gz
+          gzip -n -c -9 ./Image > ./Image.gz
 
       # ==================== Prepare AnyKernel3 Package ====================
       # The AnyKernel3 directory is staged in place; upload-artifact wraps it
