@@ -1,15 +1,25 @@
 #!/usr/bin/env bash
-# Integration of NoMount v2.1.0 into a GKI kernel tree.
+# Integration of the vendored NoMount v2.2.0 into a GKI kernel tree.
 # NoMount v2.x operates via dynamic VFS structure hijacking (i_op, f_op, s_op, d_op)
 # and lives self-contained under fs/nomount/, eliminating intrusive kernel patches.
 #
 # Usage: inject-nomount.sh <SRC_DIR containing Kconfig, Makefile, nomount.c, nomount.h>
 # Run from the kernel source root (the dir that contains fs/).
-set -eu
+set -euo pipefail
 
-SRC="${1:-}"
+SRC="${1:?usage: inject-nomount.sh <vendored-source-dir>}"
 
-echo "=== NoMount v2.1.0 VFS Integration ==="
+echo "=== NoMount v2.2.0 VFS Integration ==="
+
+# Validate before changing the kernel tree. CI must never silently fetch a
+# different upstream revision when the reviewed source bundle is incomplete.
+for file in nomount.c nomount.h Kconfig Makefile; do
+  [ -s "$SRC/$file" ] || { echo "Missing NoMount source: $SRC/$file" >&2; exit 1; }
+done
+[ -f fs/Makefile ] && [ -f fs/Kconfig ] || {
+  echo "Run this helper from the kernel source root" >&2
+  exit 1
+}
 
 # 1. Clean up legacy v1.1.0 files if present
 rm -f fs/nomount.c fs/nomount.h
@@ -23,21 +33,10 @@ fi
 # 2. Setup fs/nomount directory
 mkdir -p fs/nomount
 
-if [ -n "$SRC" ] && [ -f "$SRC/nomount.c" ] && [ -f "$SRC/Kconfig" ]; then
-  echo "  + Copying NoMount v2.1.0 from local source: $SRC"
-  cp -f "$SRC/nomount.c" fs/nomount/
-  cp -f "$SRC/nomount.h" fs/nomount/
-  cp -f "$SRC/Kconfig" fs/nomount/
-  cp -f "$SRC/Makefile" fs/nomount/
-else
-  echo "  + Fetching NoMount v2.1.0 from official upstream repository..."
-  TMP_NM="/tmp/nomount_upstream"
-  rm -rf "$TMP_NM"
-  git clone --depth 1 -b "v2.1.0" https://github.com/maxsteeel/nomount.git "$TMP_NM" 2>/dev/null || \
-  git clone --depth 1 https://github.com/maxsteeel/nomount.git "$TMP_NM"
-  cp -f "$TMP_NM/kernel/src/"* fs/nomount/
-  rm -rf "$TMP_NM"
-fi
+echo "  + Copying reviewed NoMount source: $SRC"
+for file in nomount.c nomount.h Kconfig Makefile; do
+  cp -f "$SRC/$file" fs/nomount/
+done
 
 # 3. Add to fs/Makefile (idempotent)
 if ! grep -q 'nomount/' fs/Makefile; then
@@ -68,4 +67,4 @@ else
   echo "  ✓ fs/Kconfig already configured"
 fi
 
-echo "=== NoMount v2.1.0 successfully integrated ==="
+echo "=== NoMount v2.2.0 successfully integrated ==="

@@ -1,0 +1,49 @@
+{
+  "checked_at": "2026-10-25",
+  "nomount": {
+    "url": "https://github.com/maxsteeel/nomount.git",
+    "ref": "master",
+    "commit": "bf1847f98fed382369c43bfd652cd93774b9b8e3",
+    "version": "2.2.0",
+    "verified_run": "https://github.com/maxsteeel/nomount/actions/runs/39815361476"
+  },
+  "susfs": {
+    "url": "https://gitlab.com/simonpunk/susfs4ksu.git",
+    "ref": "gki-android12-5.10",
+    "commit": "5419f4ee97cc8bf7ca67a9ff207f39653d7784f4",
+    "version": "2.3.0"
+  },
+  "vpnhide": {
+    "url": "https://github.com/okhsunrog/vpnhide.git",
+    "ref": "main",
+    "commit": "d85dc3423d6fb647f33f8c23b8d5f453c4238419",
+    "version": "1.3.1"
+  },
+  "droidspaces": {
+    "url": "https://github.com/ravindu644/Droidspaces-OSS.git",
+    "ref": "main",
+    "commit": "847ecdd2c9431f3fa69647eed4060738275aeece"
+  },
+  "bbg": {
+    "url": "https://github.com/vc-teahouse/Baseband-guard.git",
+    "ref": "main",
+    "commit": "a54e0dc6cf0aff4dd87fec49644a02d2eb612905"
+  },
+  "bakasu": {
+    "url": "https://github.com/Baka-SU/BakaSU.git",
+    "ref": "main",
+    "commit": "d5e9e025b8b49155f8014684d64c91742b465f65"
+  },
+  "sukisu_patches": {
+    "url": "https://github.com/ShirkNeko/SukiSU_patch.git",
+    "commit": "7c6289c95bdc786119b03d150236853b7b4872ca"
+  },
+  "kernel_patches": {
+    "url": "https://github.com/WildKernels/kernel_patches.git",
+    "commit": "fa76c90e2cb284e6ce22b0b008ad4dd19820dbb1"
+  },
+  "action_build": {
+    "url": "https://github.com/Numbersf/Action-Build.git",
+    "commit": "5d4d65d3770ac40c1df5b2ea11aef231da5b3c52"
+  }
+}

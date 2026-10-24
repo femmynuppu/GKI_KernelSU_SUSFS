@@ -56,19 +56,20 @@ on:
       use_zram:
         required: true
         type: boolean
-        default: true
       use_bbg:
         required: true
         type: boolean
-        default: true
       use_rekernel:
         required: false
         type: boolean
         default: false
+      use_kpm:
+        required: false
+        type: string
+        default: "disabled"
       enable_susfs:
         required: true
         type: boolean
-        default: true
       supp_op:
         required: false
         type: boolean
@@ -270,7 +271,11 @@ jobs:
 
           echo "克隆 SUSFS (分支: $SUSFS_BRANCH)..."
           # BakaSU/ReSukiSU 使用 simonpunk 的原版 SUSFS
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
+          if [ "$SUSFS_BRANCH" = "gki-android12-5.10" ]; then
+            bash "$GITHUB_WORKSPACE/build-helpers/checkout-locked-dependency.sh" susfs susfs4ksu
+          else
+            git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
+          fi
           # Pin ke commit yang sudah diverifikasi sukses (prevents drift)
           cd susfs4ksu
           SUSFS_PINNED=$(grep "^${SUSFS_BRANCH}=" "$GITHUB_WORKSPACE/config/config" 2>/dev/null | cut -d= -f2)
@@ -300,10 +305,10 @@ jobs:
           echo "SUSFS 仓库最新提交日期: $SUSFS_LATEST_COMMIT_DATE"
 
           echo "准备补丁资源..."
-          git clone https://github.com/WildKernels/kernel_patches.git
-          git clone https://github.com/ShirkNeko/SukiSU_patch.git
+          bash "$GITHUB_WORKSPACE/build-helpers/checkout-locked-dependency.sh" kernel_patches kernel_patches
+          bash "$GITHUB_WORKSPACE/build-helpers/checkout-locked-dependency.sh" sukisu_patches SukiSU_patch
           echo "使用当前仓库补丁目录: $ZZH_PATCHES"
-          git clone https://github.com/Numbersf/Action-Build.git --depth=1
+          bash "$GITHUB_WORKSPACE/build-helpers/checkout-locked-dependency.sh" action_build Action-Build
 
       # ==================== Sync Android Kernel Source ====================
       - name: Sync Android Kernel Source
@@ -392,7 +397,7 @@ jobs:
       - name: Fix glibc 2.38 Compatibility
         working-directory: ${{ env.KERNEL_ROOT }}/common
         run: |
-          RAW_SUB="${{ inputs.sub_level }}"
+          RAW_SUB="$ACTUAL_SUBLEVEL"
           [[ ! "$RAW_SUB" =~ ^[0-9]+$ ]] && CURRENT_SUB=99999 || CURRENT_SUB=$RAW_SUB
 
           NEEDS_FIX=false
@@ -436,7 +441,7 @@ jobs:
             BRANCH="${branch_input#-s }"
             echo "Using custom branch/commit: $BRANCH"
           else
-            BRANCH="main"
+            BRANCH=$(python3 -c 'import json; print(json.load(open("config/upstream-lock.json"))["bakasu"]["commit"])')
           fi
 
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
@@ -447,15 +452,14 @@ jobs:
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           echo "Integrating BakaSU (Variant: ${{ inputs.ksu_variant }})..."
-          curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/5b76b884c75f729a220bb317aa4a4fc78f0e0e9c/kernel/setup.sh" -o setup.sh
+          curl -fLSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/d5e9e025b8b49155f8014684d64c91742b465f65/kernel/setup.sh" -o setup.sh
           echo "a2aa30891ea57592abe0e4fb871205a7fdafb0548644d4666a4dd9d30bfce8a4  setup.sh" | sha256sum -c -
           bash setup.sh "$BRANCH"
           rm -f setup.sh
 
-          # Neutralize upstream intentional build suspensions (defense-in-depth)
-          if [ -f "KernelSU/kernel/tools/susfs_compat.mk" ]; then
-            echo "Checking susfs_compat.mk for upstream suspend directives..."
-            sed -i '/Please wait susfs update/d' KernelSU/kernel/tools/susfs_compat.mk || true
+          if [[ "$BRANCH" =~ ^[0-9a-f]{40}$ ]] && [ "$(git -C KernelSU rev-parse HEAD)" != "$BRANCH" ]; then
+            echo "::error::BakaSU setup did not select the requested commit"
+            exit 1
           fi
           if [ -d "KernelSU/.git" ]; then
             KSU_LATEST_COMMIT_DATE=$(git -C KernelSU log -1 --date=format:'%Y-%m-%d %H:%M:%S %z' --format='%cd')
@@ -510,7 +514,7 @@ jobs:
           esac
 
           cd $KERNEL_ROOT/common
-          CURRENT_SUB="${{ inputs.sub_level }}"
+          CURRENT_SUB="$ACTUAL_SUBLEVEL"
           if [[ ! "$CURRENT_SUB" =~ ^[0-9]+$ ]]; then
             CURRENT_SUB=99999
           fi
@@ -590,7 +594,7 @@ jobs:
             fi
           fi
 
-          patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+          patch -p1 --batch < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
 
           # 主补丁应用后还原临时上下文，避免无关源码差异保留到最终产物
           if [[ "${{ inputs.android_version }}" == "android12" && "${{ inputs.kernel_version }}" == "5.10" ]]; then
@@ -1007,13 +1011,13 @@ jobs:
         run: |
           FIX_SCRIPT="${{ github.workspace }}/build-helpers/fix-susfs-compat.sh"
           if [ -f "$FIX_SCRIPT" ]; then
-            bash "$FIX_SCRIPT" "$KERNEL_ROOT/common" "${{ inputs.sub_level }}" "${{ inputs.android_version }}" "${{ inputs.kernel_version }}" "$KERNEL_PATCHES"
+            bash "$FIX_SCRIPT" "$KERNEL_ROOT/common" "$ACTUAL_SUBLEVEL" "${{ inputs.android_version }}" "${{ inputs.kernel_version }}" "$KERNEL_PATCHES"
           else
             echo "::warning::fix-susfs-compat.sh not found, skipping"
           fi
 
       # ==================== Inject NoMount VFS ====================
-      # NoMount v2.1.0 mountless VFS redirection via dynamic structure hijacking. Coexists cleanly with BakaSU+SUSFS.
+      # NoMount v2.2.0, vendored from the successful upstream run in config/upstream-lock.json.
       - name: Inject NoMount VFS Hooks
         if: inputs.add_nomount
         working-directory: ${{ env.KERNEL_ROOT }}/common
@@ -1042,7 +1046,7 @@ jobs:
       - name: Clone Droidspaces Patches
         if: inputs.droidspaces != 'off'
         run: |
-          git clone --depth 1 https://github.com/ravindu644/Droidspaces-OSS.git /tmp/Droidspaces-OSS
+          bash "$GITHUB_WORKSPACE/build-helpers/checkout-locked-dependency.sh" droidspaces /tmp/Droidspaces-OSS
           echo "DROIDSPACES_PATCHES=/tmp/Droidspaces-OSS/Documentation/resources/kernel-patches/GKI" >> $GITHUB_ENV
 
       # ==================== Backup Original defconfig ====================
@@ -1071,17 +1075,13 @@ jobs:
               exit 0
               ;;
           esac
-          if ! patch -p1 --forward < "$PATCH_FILE"; then
-            echo "::warning::SYSVIPC kABI 补丁应用失败，可能已应用或上下文不匹配"
-          fi
+          patch -p1 --batch --forward < "$PATCH_FILE"
 
           # 5.10 及以下还需要 POSIX_MQUEUE 的 kABI 修复
           if [ "$KERNEL_VER" = "5.10" ]; then
             echo "应用 Droidspaces POSIX_MQUEUE kABI 修复补丁 (5.10)..."
             POSIX_PATCH="$DROIDSPACES_PATCHES/below-kernel-6.12/002.5.10_or_lower_use_android_abi_padding_for_posix_mqueue.patch"
-            if ! patch -p1 --forward < "$POSIX_PATCH"; then
-              echo "::warning::POSIX_MQUEUE kABI 补丁应用失败，可能已应用或上下文不匹配"
-            fi
+            patch -p1 --batch --forward < "$POSIX_PATCH"
           fi
 
           # Android 16 / 6.12 的 rust_binder.ko 在启用 IPC_NS 后会引用
@@ -1257,14 +1257,10 @@ jobs:
           cp -r $SUKISU_PATCHES/other/zram/lz4k_oplus ./lib/
 
           cp $SUKISU_PATCHES/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
-          if ! patch -p1 -F 3 < lz4kd.patch; then
-            echo "::warning::lz4kd.patch apply failed, may already be applied or context mismatch"
-          fi
+          patch -p1 --batch -F 3 < lz4kd.patch
 
           cp $SUKISU_PATCHES/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
-          if ! patch -p1 -F 3 < lz4k_oplus.patch; then
-            echo "::warning::lz4k_oplus.patch apply failed, may already be applied or context mismatch"
-          fi
+          patch -p1 --batch -F 3 < lz4k_oplus.patch
 
       # ==================== Fix 6.6 WiFi/BT Compatibility (Samsung + Xiaomi) ====================
       - name: Fix 6.6 WiFi/BT Compatibility (Samsung + Xiaomi)
@@ -1368,7 +1364,9 @@ jobs:
         if: inputs.use_bbg
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
-          wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
+          bash "$GITHUB_WORKSPACE/build-helpers/checkout-locked-dependency.sh" bbg "$KERNEL_ROOT/Baseband-guard"
+          BBG_COMMIT=$(git -C "$KERNEL_ROOT/Baseband-guard" rev-parse HEAD)
+          bash "$KERNEL_ROOT/Baseband-guard/setup.sh" "$BBG_COMMIT"
           echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' common/security/Kconfig
 
@@ -1454,7 +1452,7 @@ jobs:
             fi
           fi
 
-          CURRENT_SUB="${{ inputs.sub_level }}"
+          CURRENT_SUB="$ACTUAL_SUBLEVEL"
           if [[ ! "$CURRENT_SUB" =~ ^[0-9]+$ ]]; then
             CURRENT_SUB=99999
           fi
@@ -1534,30 +1532,6 @@ jobs:
           # 配置内核名称
           if [ -n "${{ inputs.version }}" ]; then
             bash "$GITHUB_WORKSPACE/build-helpers/spoof-kernel-version.sh" "$KERNEL_ROOT/common" "${{ inputs.version }}"
-            CLEAN_VERSION=$(echo "${{ inputs.version }}" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+//')
-            
-            # 定义 KMI_TAG（与自动版本保持一致）
-            case "${{ inputs.android_version }}-${{ inputs.kernel_version }}" in
-              "android14-6.1")  KMI_TAG="android14-11" ;;
-              "android15-6.6")  KMI_TAG="android15-8" ;;
-              "android16-6.12") KMI_TAG="android16-5" ;;
-              *) KMI_TAG="${{ inputs.android_version }}" ;;
-            esac
-            
-            if [ "${{ inputs.kernel_version }}" = "6.1" ]; then
-              # 6.1：旧格式，包含 KMI_TAG
-              KMI_LOCAL="-${KMI_TAG}${CLEAN_VERSION}"
-              sed -i "\$s|echo \"\$res\"|echo \"${KMI_LOCAL}\"|" ./common/scripts/setlocalversion 2>/dev/null || true
-              sed -i "/^CONFIG_LOCALVERSION=/ s/=\"[^\"]*\"/=\"${KMI_LOCAL}\"/" ./common/arch/arm64/configs/gki_defconfig 2>/dev/null || true
-            elif [ "${{ inputs.kernel_version }}" = "5.10" ] || [ "${{ inputs.kernel_version }}" = "5.15" ]; then
-              # 5.x：旧格式，不包含 KMI_TAG
-              sed -i "\$s|echo \"\$res\"|echo \"${CLEAN_VERSION}\"|" ./common/scripts/setlocalversion 2>/dev/null || true
-              sed -i '/^CONFIG_LOCALVERSION=/ s/="\([^"]*\)"/="'"$CLEAN_VERSION"'"/' ./common/arch/arm64/configs/gki_defconfig
-            else
-              # 6.6+：新格式 setlocalversion，包含 KMI_TAG
-              SUFFIX="-${KMI_TAG}${CLEAN_VERSION}"
-              perl -i -0777 -pe 's/(.*)echo "\$\{KERNELVERSION\}\$\{file_localversion\}\$\{config_localversion\}\$\{LOCALVERSION\}\$\{scm_version\}"/$1echo "\$\{KERNELVERSION\}'"${SUFFIX}"'"/s' ./common/scripts/setlocalversion 2>/dev/null || true
-            fi
           elif [ ! -f "build/build.sh" ]; then
             cd ./common
             BID="ab$((RANDOM % 90000000 + 10000000))"
@@ -1672,6 +1646,31 @@ jobs:
             echo "当前 KSU 最新提交日期: ${KSU_LATEST_COMMIT_DATE}"
             echo "当前 SUSFS 最新提交日期: ${SUSFS_LATEST_COMMIT_DATE}"
             echo "如果日期不同或相差过远则补丁失效、编译失败"
+
+      - name: Verify Compiled Kernel Features and Identity
+        if: inputs.kernel_version == '5.10' || inputs.kernel_version == '5.15'
+        env:
+          REQUESTED_RELEASE: ${{ inputs.version }}
+          REQUESTED_BUILD_TIME: ${{ inputs.build_time }}
+          VERIFY_SUSFS: ${{ inputs.enable_susfs }}
+          VERIFY_NOMOUNT: ${{ inputs.add_nomount }}
+          VERIFY_VPNHIDE: ${{ inputs.add_vpnhide }}
+          VERIFY_BBG: ${{ inputs.use_bbg }}
+          VERIFY_ZRAM: ${{ inputs.use_zram }}
+          VERIFY_DROIDSPACES: ${{ inputs.droidspaces != 'off' }}
+        run: |
+          python3 "$GITHUB_WORKSPACE/build-helpers/verify-built-kernel.py" \
+            "$KERNEL_ROOT" \
+            "$KERNEL_ROOT/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist/Image" \
+            "$GITHUB_WORKSPACE/build-evidence"
+
+      - name: Upload Verified Build Configuration
+        if: inputs.kernel_version == '5.10' || inputs.kernel_version == '5.15'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}-BuildEvidence
+          path: build-evidence/
+          if-no-files-found: error
 
       # ==================== Prepare Boot Images ====================
       - name: Prepare Boot Images

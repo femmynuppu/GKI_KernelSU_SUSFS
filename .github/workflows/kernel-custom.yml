@@ -38,12 +38,12 @@ on:
         description: "Kernel Sublevel (e.g. 66, 118, 236, X)"
         required: true
         type: string
-        default: "66"
+        default: "236"
       os_patch_level:
         description: "Security Patch Level (e.g. 2025-05, lts)"
         required: true
         type: string
-        default: "2022-01"
+        default: "2025-05"
       revision:
         description: "Revision (e.g. r1, r11 - 5.10 only)"
         required: false
@@ -62,23 +62,24 @@ on:
         description: "Custom / Spoofed Kernel Release Name (Optional)"
         required: false
         type: string
+        default: "5.10.236-android12-9-00020-gf997514b333d-ab13743839"
       build_time:
         description: "Custom / Spoofed Build Timestamp (Optional, N or empty=current UTC)"
         required: false
         type: string
-        default: "Sun Dec 01 08:10:00 UTC 2024"
+        default: "Mon Jul 7 16:32:37 UTC 2025"
 
       # ==================== Feature Switches ====================
       use_zram:
         description: "Enable ZRAM LZ4KD Enhanced Compression"
         required: true
         type: boolean
-        default: false
+        default: true
       use_bbg:
         description: "Enable Baseband Guard (BBG) Anti-Wipe Protection"
         required: true
         type: boolean
-        default: false
+        default: true
       use_rekernel:
         description: "Enable Re-Kernel Driver (Experimental)"
         required: false
@@ -103,7 +104,7 @@ on:
           - "678"
           - "123"
           - "345"
-        default: "off"
+        default: "678"
       droidspaces_ntsync:
         description: "Enable NTSync for Droidspaces Container"
         required: false
@@ -120,7 +121,7 @@ on:
         type: boolean
         default: false
       add_nomount:
-        description: "Enable NoMount VFS (Mountless Path Redirection v2.1.0)"
+        description: "Enable NoMount VFS (Mountless Path Redirection v2.2.0)"
         required: false
         type: boolean
         default: true
@@ -128,7 +129,7 @@ on:
         description: "Enable In-Tree VPNHide Backend (hide VPN interface)"
         required: false
         type: boolean
-        default: false
+        default: true
       add_ghostlock:
         description: "Apply Ghostlock Mitigations (CVE-2026-43499 & CVE-2026-53163)"
         required: false
