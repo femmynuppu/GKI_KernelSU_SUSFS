@@ -28,7 +28,9 @@ class InstallerTests(unittest.TestCase):
             devices = root / "dev/block/by-name"
             devices.mkdir(parents=True)
             (root / "dev/null").touch()
-            (root / "proc").mkdir()
+            (root / "proc/self").mkdir(parents=True, exist_ok=True)
+            if not (root / "proc/self/fd").exists():
+                os.symlink("/dev/fd" if sys.platform == "darwin" else "/proc/self/fd", root / "proc/self/fd")
             (root / "proc/cmdline").write_text("")
             (root / "proc/mtd").write_text("")
             (root / "proc/version").write_text("Linux version 5.10.236-test (host)\n")
@@ -44,10 +46,8 @@ class InstallerTests(unittest.TestCase):
 
             def virtualize(text):
                 text = text.replace("/dev/", str(root / "dev") + "/")
-                for name in ("cmdline", "mtd", "version"):
-                    text = text.replace("/proc/" + name, str(root / "proc" / name))
+                text = text.replace("/proc/", str(root / "proc") + "/")
                 return text
-
             # setup_ak executes on source. The replacement functions below
             # take over before anykernel.sh reaches its installation calls.
             core = virtualize(CORE) + """

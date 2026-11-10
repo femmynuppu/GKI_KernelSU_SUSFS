@@ -1,10 +1,10 @@
 {
-  "checked_at": "2026-10-25",
+  "checked_at": "2026-11-10",
   "anykernel3": {
     "url": "https://github.com/osm0sis/AnyKernel3.git",
     "ref": "master",
-    "commit": "020dfeccf9d7e962a48400fc94d3e451df92eead",
-    "base_version": "20260904"
+    "commit": "41f04bdb4ee30a44e429c2c1131d5e8bb32b15f1",
+    "base_version": "20261026"
   },
   "nomount": {
     "url": "https://github.com/maxsteeel/nomount.git",
@@ -16,40 +16,40 @@
   "susfs": {
     "url": "https://gitlab.com/simonpunk/susfs4ksu.git",
     "ref": "gki-android12-5.10",
-    "commit": "5419f4ee97cc8bf7ca67a9ff207f39653d7784f4",
+    "commit": "5436438b5cc77f146e04f71070da153dabe17a9d",
     "version": "2.3.0"
   },
   "vpnhide": {
     "url": "https://github.com/okhsunrog/vpnhide.git",
     "ref": "main",
-    "commit": "d85dc3423d6fb647f33f8c23b8d5f453c4238419",
+    "commit": "b0999b7db7356cd2b7809bb762ab92f6b507b739",
     "version": "1.3.1"
   },
   "droidspaces": {
     "url": "https://github.com/ravindu644/Droidspaces-OSS.git",
     "ref": "main",
-    "commit": "847ecdd2c9431f3fa69647eed4060738275aeece"
+    "commit": "cdadb9eb5d0f86aacffff60776333e6f6b73a30a"
   },
   "bbg": {
     "url": "https://github.com/vc-teahouse/Baseband-guard.git",
     "ref": "main",
-    "commit": "a54e0dc6cf0aff4dd87fec49644a02d2eb612905"
+    "commit": "028ff7fd509e2104596da7cc1ef8e6ce2a0c9082"
   },
   "bakasu": {
     "url": "https://github.com/Baka-SU/BakaSU.git",
     "ref": "main",
-    "commit": "d5e9e025b8b49155f8014684d64c91742b465f65"
+    "commit": "548d1dda060ca198823d8808804d01f5209ef4a9"
   },
   "sukisu_patches": {
     "url": "https://github.com/ShirkNeko/SukiSU_patch.git",
-    "commit": "7c6289c95bdc786119b03d150236853b7b4872ca"
+    "commit": "eec45788c9a115e5498040298133336d6b6071dd"
   },
   "kernel_patches": {
     "url": "https://github.com/WildKernels/kernel_patches.git",
-    "commit": "fa76c90e2cb284e6ce22b0b008ad4dd19820dbb1"
+    "commit": "b6690c6c66a05f873faf460daaaac1c84de9d720"
   },
   "action_build": {
     "url": "https://github.com/Numbersf/Action-Build.git",
-    "commit": "5d4d65d3770ac40c1df5b2ea11aef231da5b3c52"
+    "commit": "d8e1dff309f8ab35b40afbf27d5444e095be8010"
   }
 }
