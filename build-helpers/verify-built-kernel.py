@@ -38,6 +38,10 @@ def verify(root: Path, image: Path, output: Path) -> None:
     missing = sorted(set(required) - lines)
     if missing:
         raise ValueError("compiled configuration is missing: " + ", ".join(missing))
+    if os.environ.get("VERIFY_BBG") == "true":
+        lsm_lines = [l for l in lines if l.startswith("CONFIG_LSM=")]
+        if not lsm_lines or "baseband_guard" not in lsm_lines[0]:
+            raise ValueError(f"compiled CONFIG_LSM does not include baseband_guard: {lsm_lines}")
     header = (config.parent / "include/generated/utsrelease.h").read_text()
     release_match = re.search(r'^#define UTS_RELEASE "([^"]+)"$', header, re.M)
     if not release_match:

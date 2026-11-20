@@ -81,6 +81,24 @@ class VerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "header is malformed"):
             verifier.verify(self.root, self.image, self.out)
 
+    def test_bbg_verified_with_baseband_guard_lsm(self):
+        os.environ["VERIFY_BBG"] = "true"
+        self.config.write_text(self.config.read_text() + 'CONFIG_BBG=y\nCONFIG_LSM="selinux,baseband_guard"\n')
+        verifier.verify(self.root, self.image, self.out)
+        self.assertTrue((self.out / "kernel.config").is_file())
+
+    def test_bbg_missing_baseband_guard_in_lsm_is_rejected(self):
+        os.environ["VERIFY_BBG"] = "true"
+        self.config.write_text(self.config.read_text() + 'CONFIG_BBG=y\nCONFIG_LSM="selinux"\n')
+        with self.assertRaisesRegex(ValueError, "compiled CONFIG_LSM does not include baseband_guard"):
+            verifier.verify(self.root, self.image, self.out)
+
+    def test_bbg_missing_lsm_is_rejected(self):
+        os.environ["VERIFY_BBG"] = "true"
+        self.config.write_text(self.config.read_text() + "CONFIG_BBG=y\n")
+        with self.assertRaisesRegex(ValueError, "compiled CONFIG_LSM does not include baseband_guard"):
+            verifier.verify(self.root, self.image, self.out)
+
 
 if __name__ == "__main__":
     unittest.main()
