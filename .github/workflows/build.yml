@@ -1256,11 +1256,14 @@ jobs:
           cp -r $SUKISU_PATCHES/other/zram/lz4k/crypto/* ./crypto/
           cp -r $SUKISU_PATCHES/other/zram/lz4k_oplus ./lib/
 
-          cp $SUKISU_PATCHES/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch ./
-          patch -p1 --batch -F 3 < lz4kd.patch
-
-          cp $SUKISU_PATCHES/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch ./
-          patch -p1 --batch -F 3 < lz4k_oplus.patch
+          if [ -d "$SUKISU_PATCHES/other/zram/zram_patch/${{ inputs.kernel_version }}" ]; then
+            cp "$SUKISU_PATCHES/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4kd.patch" ./
+            patch -p1 --batch -F 3 < lz4kd.patch
+            cp "$SUKISU_PATCHES/other/zram/zram_patch/${{ inputs.kernel_version }}/lz4k_oplus.patch" ./
+            patch -p1 --batch -F 3 < lz4k_oplus.patch
+          else
+            echo "No ZRAM LZ4 patches for kernel ${{ inputs.kernel_version }}, skipping patch stack"
+          fi
 
       # ==================== Fix 6.6 WiFi/BT Compatibility (Samsung + Xiaomi) ====================
       - name: Fix 6.6 WiFi/BT Compatibility (Samsung + Xiaomi)
@@ -1370,6 +1373,12 @@ jobs:
           python3 "$GITHUB_WORKSPACE/build-helpers/fix-bbg-host-tools.py" "$KERNEL_ROOT/Baseband-guard/Makefile"
           echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' common/security/Kconfig
+          if grep -q '^CONFIG_LSM=' "$DEFCONFIG"; then
+            if ! grep -q 'baseband_guard' "$DEFCONFIG"; then
+              sed -i 's/^CONFIG_LSM="\(.*\)"/CONFIG_LSM="\1,baseband_guard"/' "$DEFCONFIG"
+              echo "Appended baseband_guard to CONFIG_LSM in $DEFCONFIG"
+            fi
+          fi
 
       # ==================== Apply Re-Kernel Driver ====================
       # Re-Kernel 通过 GKI Vendor Hooks 提供内核级保护功能
@@ -1580,13 +1589,13 @@ jobs:
           if [ -f "$f" ]; then
             if [[ "${{ inputs.kernel_version }}" == "5.10" || "${{ inputs.kernel_version }}" == "5.15" ]]; then
               echo "应用 5.x 经典时间戳补丁: $f"
-              perl -pi -e "s{UTS_VERSION=\"\\\$\(echo \\\$UTS_VERSION \\\$CONFIG_FLAGS \\\$TIMESTAMP \\| cut -b -\\\$UTS_LEN\)\"}{UTS_VERSION=\"#1 SMP PREEMPT $DATESTR\"}" "$f"
+              DATESTR="$DATESTR" perl -pi -e 'my $d = $ENV{DATESTR}; s{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT $d"}' "$f"
             else
               echo "应用 6.x mkcompile_h 补丁: $f"
               if grep -q 'UTS_VERSION=' "$f"; then
-                perl -pi -e "s{UTS_VERSION=\"\\\$\\\(.*?\\\)\"}{UTS_VERSION=\"#1 SMP PREEMPT $DATESTR\"}" "$f"
+                DATESTR="$DATESTR" perl -pi -e 'my $d = $ENV{DATESTR}; s{UTS_VERSION="\$\(.*?\)"}{UTS_VERSION="#1 SMP PREEMPT $d"}' "$f"
               else
-                perl -0777 -pi -e "s{cat <<EOF}{cat <<EOF\n#undef UTS_VERSION\n#define UTS_VERSION \"#1 SMP PREEMPT $DATESTR\" } unless /UTS_VERSION/" "$f"
+                DATESTR="$DATESTR" perl -0777 -pi -e 'my $d = $ENV{DATESTR}; s{cat <<EOF}{cat <<EOF\n#undef UTS_VERSION\n#define UTS_VERSION "#1 SMP PREEMPT $d" } unless /UTS_VERSION/' "$f"
               fi
             fi
           fi

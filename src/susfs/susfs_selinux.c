@@ -49,13 +49,42 @@ static const char *hidden_types[] = {
  */
 bool susfs_selinux_is_hidden_context(const char *context)
 {
+	const char *p1, *p2, *p3;
+	const char *type_start;
+	size_t type_len;
 	int i;
 
 	if (!context)
 		return false;
 
+	/*
+	 * SELinux context format: user:role:type[:sensitivity[:category]]
+	 * Extract the 3rd field ('type') and perform exact matching against hidden_types.
+	 * Also handle Duck Detector probe "fsck_untrusted:sys_admin:s0" where target
+	 * appears in the 1st field.
+	 */
+	p1 = strchr(context, ':');
+	if (p1) {
+		p2 = strchr(p1 + 1, ':');
+		if (p2) {
+			size_t f1_len = (size_t)(p1 - context);
+			type_start = p2 + 1;
+			p3 = strchr(type_start, ':');
+			type_len = p3 ? (size_t)(p3 - type_start) : strlen(type_start);
+
+			for (i = 0; hidden_types[i]; i++) {
+				size_t hlen = strlen(hidden_types[i]);
+				if ((type_len == hlen && strncmp(type_start, hidden_types[i], hlen) == 0) ||
+				    (f1_len == hlen && strncmp(context, hidden_types[i], hlen) == 0))
+					return true;
+			}
+			return false;
+		}
+	}
+
+	/* Fall back safely if string doesn't have 3 colon-separated fields */
 	for (i = 0; hidden_types[i]; i++) {
-		if (strstr(context, hidden_types[i]))
+		if (strcmp(context, hidden_types[i]) == 0)
 			return true;
 	}
 	return false;

@@ -59,10 +59,10 @@ on:
 
       # ==================== Optional Spoofing Configuration ====================
       version:
-        description: "Custom / Spoofed Kernel Release Name (Optional)"
+        description: "Custom / Spoofed Kernel Release Name (Optional, e.g. 5.10.236-android12-9-00020-gf997514b333d-ab13743839)"
         required: false
         type: string
-        default: "5.10.236-android12-9-00020-gf997514b333d-ab13743839"
+        default: ""
       build_time:
         description: "Custom / Spoofed Build Timestamp (Optional, N or empty=current UTC)"
         required: false

@@ -174,5 +174,92 @@ for mk in "$KERNEL_DIR/drivers/kernelsu/tools/susfs_compat.mk" "$KERNEL_DIR/../K
     fi
 done
 
+# ---------------------------------------------------------------------------
+# Fix 8: susfs.c — prevent sus_path self-lockout regression (SUSFS v2.4.0)
+# In SUSFS v2.4.0, susfs_is_inode_sus_path() hides paths from all UIDs >= 10000
+# unless susfs_is_uid_allowed_for_sus_path(uid) returns true. When the supercall
+# dispatcher lacks CMD_SUSFS_SET_SUS_PATH_UID_FILTER (e.g. BakaSU), the bitmap
+# is never populated and all apps are locked out of their own files.
+# Restore the inode ownership check inside susfs_is_inode_sus_path() so that an
+# application is never locked out of its own files/directories if it owns the inode.
+# ---------------------------------------------------------------------------
+SUSFS_C="$KERNEL_DIR/fs/susfs.c"
+if [ -f "$SUSFS_C" ]; then
+    if grep -q "susfs_is_inode_sus_path" "$SUSFS_C"; then
+        if grep -q "Prevent self-lockout" "$SUSFS_C"; then
+            echo "fix-susfs-compat: susfs.c — self-lockout fix already applied"
+        else
+            echo "fix-susfs-compat: restoring inode ownership check in susfs.c (prevent self-lockout)"
+            python3 - "$SUSFS_C" << 'PYEOF'
+import sys, re
+
+path = sys.argv[1]
+with open(path, "r") as f:
+    content = f.read()
+
+if "Prevent self-lockout" in content:
+    sys.exit(0)
+
+fn_idx = content.find("susfs_is_inode_sus_path")
+if fn_idx == -1:
+    sys.exit(0)
+
+open_brace = content.find("{", fn_idx)
+if open_brace == -1:
+    sys.exit(0)
+
+depth = 0
+close_brace = -1
+for i in range(open_brace, len(content)):
+    if content[i] == "{":
+        depth += 1
+    elif content[i] == "}":
+        depth -= 1
+        if depth == 0:
+            close_brace = i
+            break
+
+if close_brace == -1:
+    sys.exit(0)
+
+fn_body = content[fn_idx:close_brace+1]
+
+# 1. Non-FUSE / general inode check right after `if (uid < 10000) { return false; }`
+p1 = r"([ \t]*if\s*\(\s*uid\s*<\s*10000\s*\)\s*\{[\s\S]*?return\s+false\s*;\s*\n[ \t]*\})"
+m1 = re.search(p1, fn_body)
+if not m1:
+    print("  warning: uid < 10000 check not found in susfs_is_inode_sus_path()")
+    sys.exit(0)
+
+first_line1 = m1.group(0).split("\n")[0]
+indent1 = first_line1[:len(first_line1) - len(first_line1.lstrip())] or "\t"
+sub_indent1 = indent1 + ("\t" if "\t" in indent1 else "    ")
+inject1 = f"\n\n{indent1}/* Prevent self-lockout: never hide sus_path from the inode owner */\n{indent1}if (uid_eq(inode->i_uid, current_fsuid())) {{\n{sub_indent1}return false;\n{indent1}}}"
+
+# 2. FUSE fi->inode check right after `if (!fi || !fi->inode.i_mapping) { ... return false; }`
+p2 = r"([ \t]*if\s*\(\s*!fi\s*\|\|\s*!fi->inode\.i_mapping\s*\)\s*\{[\s\S]*?return\s+false\s*;\s*\n[ \t]*\})"
+m2 = re.search(p2, fn_body)
+if m2:
+    first_line2 = m2.group(0).split("\n")[0]
+    indent2 = first_line2[:len(first_line2) - len(first_line2.lstrip())] or (indent1 + "\t")
+    sub_indent2 = indent2 + ("\t" if "\t" in indent2 else "    ")
+    inject2 = f"\n\n{indent2}if (uid_eq(fi->inode.i_uid, current_fsuid())) {{\n{sub_indent2}return false;\n{indent2}}}"
+    fn_body = fn_body[:m2.end()] + inject2 + fn_body[m2.end():]
+
+fn_body = fn_body[:m1.end()] + inject1 + fn_body[m1.end():]
+
+new_content = content[:fn_idx] + fn_body + content[close_brace+1:]
+with open(path, "w") as f:
+    f.write(new_content)
+print("  injected inode ownership checks in susfs_is_inode_sus_path()")
+PYEOF
+        fi
+    else
+        echo "fix-susfs-compat: susfs_is_inode_sus_path not found in susfs.c — skipping self-lockout fix"
+    fi
+else
+    echo "fix-susfs-compat: susfs.c not found — skipping self-lockout fix"
+fi
+
 echo "fix-susfs-compat: done"
 exit 0

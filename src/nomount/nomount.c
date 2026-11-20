@@ -166,15 +166,20 @@ static int nm_rebind_path(struct nm_rule_info *rule_info)
 static void nm_dir_rcu_free(struct rcu_head *head)
 {
     struct nm_dir_node *dir = container_of(head, struct nm_dir_node, rcu);
-    if (dir->pinned_dentry) dput(dir->pinned_dentry);
     kfree(rcu_dereference_raw(dir->children));
     kfree(dir);
 }
 
 static void nm_dir_put(struct nm_dir_node *dir_node)
 {
-    if (dir_node && atomic_dec_and_test(&dir_node->refs))
+    if (dir_node && atomic_dec_and_test(&dir_node->refs)) {
+        if (dir_node->pinned_dentry) {
+            struct dentry *pinned = dir_node->pinned_dentry;
+            dir_node->pinned_dentry = NULL;
+            dput(pinned);
+        }
         call_rcu(&dir_node->rcu, nm_dir_rcu_free);
+    }
 }
 
 static inline void nm_destroy_virtual_inode(struct inode *inode)
@@ -2157,10 +2162,19 @@ static int nm_process_payload(unsigned long user_addr)
             break;
 
         case NM_CMD_ADD_RULE: {
-            unsigned int data_size = payload->data_size, offset = payload->arg1;
+            unsigned int data_size = READ_ONCE(payload->data_size), offset = READ_ONCE(payload->arg1);
+            size_t copy_len;
+            char *kbuf;
+
             if (data_size > sizeof(payload->buffer) || offset > data_size) { payload->status = -EINVAL; break; }
-            buf_ptr = payload->buffer + offset;
-            buf_end = payload->buffer + data_size;
+            copy_len = data_size - offset;
+            if (!copy_len) break;
+
+            kbuf = kmemdup(payload->buffer + offset, copy_len, GFP_KERNEL);
+            if (!kbuf) { payload->status = -ENOMEM; break; }
+
+            buf_ptr = kbuf;
+            buf_end = kbuf + copy_len;
             mutex_lock(&nm_mutex);
             while (buf_ptr < buf_end) {
                 struct nm_rule_hdr h;
@@ -2181,15 +2195,25 @@ static int nm_process_payload(unsigned long user_addr)
                 buf_ptr += (size_t)(h.v_len + h.r_len);
             }
             mutex_unlock(&nm_mutex);
-            payload->arg1 = buf_ptr - payload->buffer;
+            payload->arg1 = offset + (buf_ptr - kbuf);
+            kfree(kbuf);
             break;
         }
 
         case NM_CMD_DEL_RULE: {
-            unsigned int data_size = payload->data_size, offset = payload->arg1;
+            unsigned int data_size = READ_ONCE(payload->data_size), offset = READ_ONCE(payload->arg1);
+            size_t copy_len;
+            char *kbuf;
+
             if (data_size > sizeof(payload->buffer) || offset > data_size) { payload->status = -EINVAL; break; }
-            buf_ptr = payload->buffer + offset;
-            buf_end = payload->buffer + data_size;
+            copy_len = data_size - offset;
+            if (!copy_len) break;
+
+            kbuf = kmemdup(payload->buffer + offset, copy_len, GFP_KERNEL);
+            if (!kbuf) { payload->status = -ENOMEM; break; }
+
+            buf_ptr = kbuf;
+            buf_end = kbuf + copy_len;
             mutex_lock(&nm_mutex);
             while (buf_ptr < buf_end) {
                 struct nm_del_hdr h;
@@ -2203,7 +2227,8 @@ static int nm_process_payload(unsigned long user_addr)
                 buf_ptr += h.v_len;
             }
             mutex_unlock(&nm_mutex);
-            payload->arg1 = buf_ptr - payload->buffer;
+            payload->arg1 = offset + (buf_ptr - kbuf);
+            kfree(kbuf);
             break;
         }
 

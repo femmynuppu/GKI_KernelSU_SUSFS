@@ -17,6 +17,7 @@
 #include <linux/version.h>
 #include <linux/slab.h>
 #include <linux/cred.h>
+#include <linux/capability.h>
 #include <linux/uidgid.h>
 #include <linux/string.h>
 #include <linux/spinlock.h>
@@ -101,12 +102,30 @@ static u32 active_hook_mask;
 #define VPNHIDE_FIRST_APP_UID 10000
 #define VPNHIDE_PER_USER_RANGE 100000
 
+static int find_target_index(uid_t target)
+{
+	int lo = 0, hi = nr_targets - 1;
+
+	while (lo <= hi) {
+		int mid = lo + (hi - lo) / 2;
+
+		if (target_uids[mid] == target)
+			return mid;
+		if (target_uids[mid] < target)
+			lo = mid + 1;
+		else
+			hi = mid - 1;
+	}
+	return -1;
+}
+
 /* The enabled-hook mask for the calling UID. */
 static u32 target_mask(void)
 {
 	uid_t uid = from_kuid(&init_user_ns, current_uid());
+	uid_t app_id = uid % VPNHIDE_PER_USER_RANGE;
 	u32 mask;
-	int lo, hi;
+	int idx;
 
 	/*
 	 * Below the app range a uid is a platform identity shared by many
@@ -117,25 +136,16 @@ static u32 target_mask(void)
 	 * root-differential diagnostics. NOT the same set as FLAG_SYSTEM:
 	 * vendor-preinstalled apps keep ordinary 10xxx uids and stay targetable.
 	 */
-	if (uid % VPNHIDE_PER_USER_RANGE < VPNHIDE_FIRST_APP_UID)
+	if (app_id < VPNHIDE_FIRST_APP_UID)
 		return 0;
 
 	spin_lock(&targets_lock);
 	mask = default_hookmask;
-	lo = 0;
-	hi = nr_targets - 1;
-	while (lo <= hi) {
-		int mid = lo + (hi - lo) / 2;
-
-		if (target_uids[mid] == uid) {
-			mask = target_masks[mid];
-			break;
-		}
-		if (target_uids[mid] < uid)
-			lo = mid + 1;
-		else
-			hi = mid - 1;
-	}
+	idx = find_target_index(uid);
+	if (idx < 0 && app_id != uid)
+		idx = find_target_index(app_id);
+	if (idx >= 0)
+		mask = target_masks[idx];
 	spin_unlock(&targets_lock);
 	return mask;
 }
@@ -260,9 +270,11 @@ static ssize_t ctl_write(struct file *file, const char __user *ubuf,
 	unsigned int default_mask = 0;
 	int n, dbg;
 
+	if (!capable(CAP_NET_ADMIN))
+		return -EPERM;
+
 	if (count > PAGE_SIZE)
 		return -EINVAL;
-
 	buf = kmalloc(count + 1, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
