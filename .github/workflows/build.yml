@@ -1017,7 +1017,7 @@ jobs:
           fi
 
       # ==================== Inject NoMount VFS ====================
-      # NoMount v2.2.0, vendored from the successful upstream run in config/upstream-lock.json.
+      # NoMount v2.3.1, vendored from the successful upstream run in config/upstream-lock.json.
       - name: Inject NoMount VFS Hooks
         if: inputs.add_nomount
         working-directory: ${{ env.KERNEL_ROOT }}/common

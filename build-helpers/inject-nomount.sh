@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Integration of the vendored NoMount v2.2.0 into a GKI kernel tree.
+# Integration of the vendored NoMount v2.3.1 into a GKI kernel tree.
 # NoMount v2.x operates via dynamic VFS structure hijacking (i_op, f_op, s_op, d_op)
 # and lives self-contained under fs/nomount/, eliminating intrusive kernel patches.
 #
@@ -9,7 +9,7 @@ set -euo pipefail
 
 SRC="${1:?usage: inject-nomount.sh <vendored-source-dir>}"
 
-echo "=== NoMount v2.2.0 VFS Integration ==="
+echo "=== NoMount v2.3.1 VFS Integration ==="
 
 # Validate before changing the kernel tree. CI must never silently fetch a
 # different upstream revision when the reviewed source bundle is incomplete.
@@ -67,4 +67,4 @@ else
   echo "  ✓ fs/Kconfig already configured"
 fi
 
-echo "=== NoMount v2.2.0 successfully integrated ==="
+echo "=== NoMount v2.3.1 successfully integrated ==="

@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-11-10",
+  "checked_at": "2026-11-20",
   "anykernel3": {
     "url": "https://github.com/osm0sis/AnyKernel3.git",
     "ref": "master",
@@ -9,15 +9,15 @@
   "nomount": {
     "url": "https://github.com/maxsteeel/nomount.git",
     "ref": "master",
-    "commit": "bf1847f98fed382369c43bfd652cd93774b9b8e3",
-    "version": "2.2.0",
-    "verified_run": "https://github.com/maxsteeel/nomount/actions/runs/39815361476"
+    "commit": "dcd77d03e9912f397a586d7da81694d1628f170e",
+    "version": "2.3.1",
+    "verified_run": "https://github.com/maxsteeel/nomount/actions/runs/44598848478"
   },
   "susfs": {
     "url": "https://gitlab.com/simonpunk/susfs4ksu.git",
     "ref": "gki-android12-5.10",
-    "commit": "5436438b5cc77f146e04f71070da153dabe17a9d",
-    "version": "2.3.0"
+    "commit": "784ac9e6fd49bb02499b5b60c57ccc9d0c680204",
+    "version": "2.4.0"
   },
   "vpnhide": {
     "url": "https://github.com/okhsunrog/vpnhide.git",

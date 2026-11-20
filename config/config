@@ -1,12 +1,12 @@
 # 本文件用于配置 SUSFS 和 SukiSU 仓库的自定义提交
 # ==================== SUSFS 各分支的 commit hash ====================
-# gki-android12-5.10 SUSFS v2.3.0, upstream checked 2026-11-10
-gki-android12-5.10=5436438b5cc77f146e04f71070da153dabe17a9d
-gki-android13-5.10=1bea9e8fb4a64920f068e5da43f9751dfe601199
-gki-android13-5.15=fe943d15ec6a1891f7a360bf210589bdffe4e318
-gki-android14-5.15=10751e3c83f6e63f886cd2af937fd0a34463824b
-gki-android14-6.1=69b8e734920b8f9ed885ab8d112969719698e242
+# gki-android12-5.10 SUSFS v2.4.0, upstream checked 2026-11-20
+gki-android12-5.10=784ac9e6fd49bb02499b5b60c57ccc9d0c680204
+gki-android13-5.10=d480b312d650601888550529695706f4a112e29e
+gki-android13-5.15=c1d1da42b74771944207ec45aaceff9c57e84985
+gki-android14-5.15=a293ab199ff84b7482d57ece06b4199411cd5c01
+gki-android14-6.1=f76b81f2a6bf98e4029cc0c823c054edbec29803
 gki-android15-6.1=
-gki-android15-6.6=ec03d0c73b821afa1d5037d6d493216f59744fcb
+gki-android15-6.6=f98f08223bbf469cc0a1542166383d253557fc32
 gki-android16-6.6=
-gki-android16-6.12=395a8c0c88d348e9fe7c14f66a456fde4653287c
+gki-android16-6.12=9b0b13f069673b9b07b713a5c66977de4d62b175
